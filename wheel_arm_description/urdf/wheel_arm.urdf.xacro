@@ -1,0 +1,485 @@
+<?xml version="1.0"?>
+<robot name="wheel_arm" xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:arg name="use_gazebo_control" default="true"/>
+  <xacro:arg name="controllers_file" default="$(find wheel_arm_control)/config/controllers.yaml"/>
+
+  <xacro:property name="base_length" value="0.62"/>
+  <xacro:property name="base_width" value="0.42"/>
+  <xacro:property name="base_height" value="0.18"/>
+  <xacro:property name="wheel_radius" value="0.09"/>
+  <xacro:property name="wheel_width" value="0.05"/>
+  <xacro:property name="wheel_y" value="0.24"/>
+  <xacro:property name="wheel_x" value="0.16"/>
+
+  <material name="dark_gray">
+    <color rgba="0.12 0.14 0.16 1.0"/>
+  </material>
+  <material name="light_gray">
+    <color rgba="0.62 0.66 0.70 1.0"/>
+  </material>
+  <material name="blue">
+    <color rgba="0.1 0.34 0.78 1.0"/>
+  </material>
+  <material name="black">
+    <color rgba="0.02 0.02 0.02 1.0"/>
+  </material>
+
+  <xacro:macro name="box_inertial" params="mass x y z ox oy oz">
+    <inertial>
+      <origin xyz="${ox} ${oy} ${oz}" rpy="0 0 0"/>
+      <mass value="${mass}"/>
+      <inertia
+        ixx="${mass * (y * y + z * z) / 12.0}" ixy="0" ixz="0"
+        iyy="${mass * (x * x + z * z) / 12.0}" iyz="0"
+        izz="${mass * (x * x + y * y) / 12.0}"/>
+    </inertial>
+  </xacro:macro>
+
+  <xacro:macro name="cylinder_inertial" params="mass radius length ox oy oz">
+    <inertial>
+      <origin xyz="${ox} ${oy} ${oz}" rpy="0 0 0"/>
+      <mass value="${mass}"/>
+      <inertia
+        ixx="${mass * (3.0 * radius * radius + length * length) / 12.0}" ixy="0" ixz="0"
+        iyy="${mass * (3.0 * radius * radius + length * length) / 12.0}" iyz="0"
+        izz="${mass * radius * radius / 2.0}"/>
+    </inertial>
+  </xacro:macro>
+
+  <link name="base_footprint"/>
+
+  <joint name="base_footprint_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
+  </joint>
+
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 ${base_height / 2.0}" rpy="0 0 0"/>
+      <geometry>
+        <box size="${base_length} ${base_width} ${base_height}"/>
+      </geometry>
+      <material name="dark_gray"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 ${base_height / 2.0}" rpy="0 0 0"/>
+      <geometry>
+        <box size="${base_length} ${base_width} ${base_height}"/>
+      </geometry>
+    </collision>
+    <xacro:box_inertial mass="18.0" x="${base_length}" y="${base_width}" z="${base_height}" ox="0" oy="0" oz="${base_height / 2.0}"/>
+  </link>
+
+  <xacro:macro name="drive_wheel" params="side y">
+    <link name="${side}_wheel_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="${pi / 2.0} 0 0"/>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+        <material name="black"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="${pi / 2.0} 0 0"/>
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
+        </geometry>
+      </collision>
+      <xacro:cylinder_inertial mass="1.2" radius="${wheel_radius}" length="${wheel_width}" ox="0" oy="0" oz="0"/>
+    </link>
+    <joint name="${side}_wheel_joint" type="continuous">
+      <parent link="base_link"/>
+      <child link="${side}_wheel_link"/>
+      <origin xyz="${wheel_x} ${y} 0" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <dynamics damping="0.1" friction="0.05"/>
+    </joint>
+  </xacro:macro>
+
+  <xacro:drive_wheel side="left" y="${wheel_y}"/>
+  <xacro:drive_wheel side="right" y="${-wheel_y}"/>
+
+  <link name="rear_caster_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.045"/>
+      </geometry>
+      <material name="light_gray"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <sphere radius="0.045"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.4"/>
+      <inertia ixx="0.00032" ixy="0" ixz="0" iyy="0.00032" iyz="0" izz="0.00032"/>
+    </inertial>
+  </link>
+
+  <joint name="rear_caster_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="rear_caster_link"/>
+    <origin xyz="-0.23 0 -0.045" rpy="0 0 0"/>
+  </joint>
+
+  <link name="arm_mount_link">
+    <visual>
+      <origin xyz="0 0 0.04" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.09" length="0.08"/>
+      </geometry>
+      <material name="blue"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.04" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.09" length="0.08"/>
+      </geometry>
+    </collision>
+    <xacro:cylinder_inertial mass="1.5" radius="0.09" length="0.08" ox="0" oy="0" oz="0.04"/>
+  </link>
+
+  <joint name="arm_mount_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="arm_mount_link"/>
+    <origin xyz="0.02 0 ${base_height}" rpy="0 0 0"/>
+  </joint>
+
+  <link name="shoulder_link">
+    <visual>
+      <origin xyz="0 0 0.11" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.10 0.10 0.22"/>
+      </geometry>
+      <material name="light_gray"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.11" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.10 0.10 0.22"/>
+      </geometry>
+    </collision>
+    <xacro:box_inertial mass="1.8" x="0.10" y="0.10" z="0.22" ox="0" oy="0" oz="0.11"/>
+  </link>
+
+  <joint name="shoulder_pan_joint" type="revolute">
+    <parent link="arm_mount_link"/>
+    <child link="shoulder_link"/>
+    <origin xyz="0 0 0.08" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.14" upper="3.14" effort="40.0" velocity="1.5"/>
+    <dynamics damping="2.0" friction="0.2"/>
+  </joint>
+
+  <link name="upper_arm_link">
+    <visual>
+      <origin xyz="0.16 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.32 0.07 0.07"/>
+      </geometry>
+      <material name="blue"/>
+    </visual>
+    <collision>
+      <origin xyz="0.16 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.32 0.07 0.07"/>
+      </geometry>
+    </collision>
+    <xacro:box_inertial mass="1.6" x="0.32" y="0.07" z="0.07" ox="0.16" oy="0" oz="0"/>
+  </link>
+
+  <joint name="shoulder_lift_joint" type="revolute">
+    <parent link="shoulder_link"/>
+    <child link="upper_arm_link"/>
+    <origin xyz="0 0 0.22" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-1.57" upper="1.57" effort="35.0" velocity="1.5"/>
+    <dynamics damping="4.0" friction="0.5"/>
+  </joint>
+
+  <link name="forearm_link">
+    <visual>
+      <origin xyz="0.14 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.28 0.06 0.06"/>
+      </geometry>
+      <material name="light_gray"/>
+    </visual>
+    <collision>
+      <origin xyz="0.14 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.28 0.06 0.06"/>
+      </geometry>
+    </collision>
+    <xacro:box_inertial mass="1.1" x="0.28" y="0.06" z="0.06" ox="0.14" oy="0" oz="0"/>
+  </link>
+
+  <joint name="elbow_joint" type="revolute">
+    <parent link="upper_arm_link"/>
+    <child link="forearm_link"/>
+    <origin xyz="0.32 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-2.2" upper="2.2" effort="30.0" velocity="1.8"/>
+    <dynamics damping="3.0" friction="0.4"/>
+  </joint>
+
+  <link name="wrist_link">
+    <visual>
+      <origin xyz="0.055 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.11 0.05 0.05"/>
+      </geometry>
+      <material name="blue"/>
+    </visual>
+    <collision>
+      <origin xyz="0.055 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.11 0.05 0.05"/>
+      </geometry>
+    </collision>
+    <xacro:box_inertial mass="0.5" x="0.11" y="0.05" z="0.05" ox="0.055" oy="0" oz="0"/>
+  </link>
+
+  <joint name="wrist_pitch_joint" type="revolute">
+    <parent link="forearm_link"/>
+    <child link="wrist_link"/>
+    <origin xyz="0.28 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-2.6" upper="2.6" effort="15.0" velocity="2.0"/>
+    <dynamics damping="2.0" friction="0.2"/>
+  </joint>
+
+  <link name="tool0">
+    <visual>
+      <origin xyz="0.04 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.08 0.04 0.04"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <origin xyz="0.04 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.08 0.04 0.04"/>
+      </geometry>
+    </collision>
+    <xacro:box_inertial mass="0.2" x="0.08" y="0.04" z="0.04" ox="0.04" oy="0" oz="0"/>
+  </link>
+
+  <joint name="tool0_joint" type="fixed">
+    <parent link="wrist_link"/>
+    <child link="tool0"/>
+    <origin xyz="0.11 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <link name="lidar_link">
+    <visual>
+      <origin xyz="0.06 0 0.025" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.055" length="0.05"/>
+      </geometry>
+      <material name="black"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0.025" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.055" length="0.05"/>
+      </geometry>
+    </collision>
+    <xacro:cylinder_inertial mass="0.25" radius="0.055" length="0.05" ox="0" oy="0" oz="0.025"/>
+  </link>
+
+  <joint name="lidar_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="lidar_link"/>
+    <origin xyz="0.18 0 ${base_height + 0.00}" rpy="0 0 0"/>
+  </joint>
+
+  <link name="imu_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.04 0.04 0.02"/>
+      </geometry>
+      <material name="blue"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.04 0.04 0.02"/>
+      </geometry>
+    </collision>
+    <xacro:box_inertial mass="0.05" x="0.04" y="0.04" z="0.02" ox="0" oy="0" oz="0"/>
+  </link>
+
+  <joint name="imu_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <origin xyz="0 0 ${base_height + 0.03}" rpy="0 0 0"/>
+  </joint>
+
+  <link name="camera_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.055 0.12 0.055"/>
+      </geometry>
+      <material name="light_gray"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.055 0.12 0.055"/>
+      </geometry>
+    </collision>
+    <xacro:box_inertial mass="0.25" x="0.055" y="0.12" z="0.055" ox="0" oy="0" oz="0"/>
+  </link>
+
+  <joint name="camera_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera_link"/>
+    <origin xyz="0.34 0 ${base_height - 0.04}" rpy="0 0 0"/>
+  </joint>
+
+  <gazebo reference="base_link">
+    <material>Gazebo/DarkGrey</material>
+  </gazebo>
+  <gazebo reference="left_wheel_link">
+    <material>Gazebo/Black</material>
+    <mu1>1.5</mu1>
+    <mu2>1.5</mu2>
+    <kp>1000000.0</kp>
+    <kd>100.0</kd>
+  </gazebo>
+  <gazebo reference="right_wheel_link">
+    <material>Gazebo/Black</material>
+    <mu1>1.5</mu1>
+    <mu2>1.5</mu2>
+    <kp>1000000.0</kp>
+    <kd>100.0</kd>
+  </gazebo>
+
+  <gazebo reference="lidar_link">
+    <sensor name="lidar" type="gpu_lidar">
+      <pose>0 0 0.06 0 0 0</pose>
+      <topic>/scan</topic>
+      <update_rate>30</update_rate>
+      <lidar>
+        <scan>
+          <horizontal>
+            <samples>720</samples>
+            <resolution>1</resolution>
+            <min_angle>-3.14159</min_angle>
+            <max_angle>3.14159</max_angle>
+          </horizontal>
+          <vertical>
+            <samples>1</samples>
+            <resolution>1</resolution>
+            <min_angle>0</min_angle>
+            <max_angle>0</max_angle>
+          </vertical>
+        </scan>
+        <range>
+          <min>0.18</min>
+          <max>12.0</max>
+          <resolution>0.01</resolution>
+        </range>
+      </lidar>
+      <always_on>true</always_on>
+      <visualize>true</visualize>
+    </sensor>
+  </gazebo>
+
+  <gazebo reference="imu_link">
+    <sensor name="imu" type="imu">
+      <topic>/imu/raw</topic>
+      <update_rate>100</update_rate>
+      <always_on>true</always_on>
+    </sensor>
+  </gazebo>
+
+  <gazebo reference="camera_link">
+    <sensor name="rgb_camera" type="camera">
+      <topic>/camera/image</topic>
+      <update_rate>30</update_rate>
+      <camera>
+        <horizontal_fov>1.047</horizontal_fov>
+        <image>
+          <width>640</width>
+          <height>480</height>
+          <format>R8G8B8</format>
+        </image>
+        <clip>
+          <near>0.05</near>
+          <far>20.0</far>
+        </clip>
+      </camera>
+      <always_on>true</always_on>
+      <visualize>true</visualize>
+    </sensor>
+  </gazebo>
+
+  <ros2_control name="GazeboSimSystem" type="system">
+    <hardware>
+      <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+    </hardware>
+    <joint name="left_wheel_joint">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="right_wheel_joint">
+      <command_interface name="velocity"/>
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="shoulder_pan_joint">
+      <command_interface name="position"/>
+      <state_interface name="position">
+        <param name="initial_value">0.0</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="shoulder_lift_joint">
+      <command_interface name="position"/>
+      <state_interface name="position">
+        <param name="initial_value">0.0</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="elbow_joint">
+      <command_interface name="position"/>
+      <state_interface name="position">
+        <param name="initial_value">0.0</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+    <joint name="wrist_pitch_joint">
+      <command_interface name="position"/>
+      <state_interface name="position">
+        <param name="initial_value">0.0</param>
+      </state_interface>
+      <state_interface name="velocity"/>
+    </joint>
+  </ros2_control>
+
+  <xacro:if value="$(arg use_gazebo_control)">
+    <gazebo>
+      <plugin filename="libign_ros2_control-system.so" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+        <parameters>$(arg controllers_file)</parameters>
+        <controller_manager_name>controller_manager</controller_manager_name>
+        <robot_param_node>robot_state_publisher</robot_param_node>
+        <robot_param>robot_description</robot_param>
+        <hold_joints>true</hold_joints>
+        <position_proportional_gain>1.0</position_proportional_gain>
+        <ros>
+          <namespace>wheel_arm</namespace>
+        </ros>
+      </plugin>
+    </gazebo>
+  </xacro:if>
+</robot>

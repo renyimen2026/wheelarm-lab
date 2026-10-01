@@ -1,0 +1,59 @@
+/**/controller_manager:
+  ros__parameters:
+    update_rate: 100
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    diff_drive_base_controller:
+      type: diff_drive_controller/DiffDriveController
+
+    arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+/**/diff_drive_base_controller:
+  ros__parameters:
+    left_wheel_names: ["left_wheel_joint"]
+    right_wheel_names: ["right_wheel_joint"]
+    wheel_separation: 0.48
+    wheel_radius: 0.09
+
+    publish_rate: 50.0
+    odom_frame_id: odom
+    base_frame_id: base_footprint
+    tf_frame_prefix_enable: false
+    pose_covariance_diagonal: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
+    twist_covariance_diagonal: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
+
+    open_loop: false
+    enable_odom_tf: true
+    cmd_vel_timeout: 0.5
+    use_stamped_vel: false
+
+    linear.x.has_velocity_limits: true
+    linear.x.max_velocity: 0.8
+    linear.x.min_velocity: -0.5
+    linear.x.has_acceleration_limits: true
+    linear.x.max_acceleration: 0.8
+    angular.z.has_velocity_limits: true
+    angular.z.max_velocity: 1.2
+    angular.z.has_acceleration_limits: true
+    angular.z.max_acceleration: 1.5
+
+/**/arm_controller:
+  ros__parameters:
+    joints:
+      - shoulder_pan_joint
+      - shoulder_lift_joint
+      - elbow_joint
+      - wrist_pitch_joint
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
+    allow_partial_joints_goal: true
+    allow_nonzero_velocity_at_trajectory_end: false
+    constraints:
+      stopped_velocity_tolerance: 0.02
+      goal_time: 0.5

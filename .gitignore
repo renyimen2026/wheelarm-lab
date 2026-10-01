@@ -1,0 +1,21 @@
+# ROS 2 / colcon build artifacts
+build/
+install/
+log/
+
+# Generated maps and recordings
+maps/*.pgm
+maps/*.yaml
+*.bag
+*.db3
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Editor and operating system files
+.vscode/
+.idea/
+*~
+*.swp
+.DS_Store
