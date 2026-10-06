@@ -27,6 +27,10 @@ def generate_launch_description():
             "world": world,
             "use_ekf": use_ekf,
             "localization_debug": localization_debug,
+            "spawn_x": LaunchConfiguration("spawn_x"),
+            "spawn_y": LaunchConfiguration("spawn_y"),
+            "spawn_z": LaunchConfiguration("spawn_z"),
+            "spawn_yaw": LaunchConfiguration("spawn_yaw"),
         }.items(),
     )
 
@@ -48,8 +52,8 @@ def generate_launch_description():
                     launch_arguments={
                         "namespace": "",
                         "use_namespace": "False",
-                        "slam": "True",
-                        "map": "",
+                        "slam": LaunchConfiguration("slam"),
+                        "map": LaunchConfiguration("map"),
                         "use_sim_time": use_sim_time,
                         "params_file": selected_params_file,
                         "autostart": autostart,
@@ -83,10 +87,12 @@ def generate_launch_description():
     return LaunchDescription(
         [
             DeclareLaunchArgument("use_sim_time", default_value="true"),
+            DeclareLaunchArgument("slam", default_value="True"),
+            DeclareLaunchArgument("map", default_value=""),
             DeclareLaunchArgument(
                 "world",
                 default_value=PathJoinSubstitution(
-                    [FindPackageShare("wheel_arm_gazebo"), "worlds", "indoor_lab.sdf"]
+                    [FindPackageShare("wheel_arm_gazebo"), "worlds", "indoor_house.sdf"]
                 ),
             ),
             DeclareLaunchArgument(
@@ -108,6 +114,10 @@ def generate_launch_description():
             DeclareLaunchArgument("autostart", default_value="true"),
             DeclareLaunchArgument("rviz", default_value="true"),
             DeclareLaunchArgument("use_ekf", default_value="true"),
+            DeclareLaunchArgument("spawn_x", default_value="3.5"),
+            DeclareLaunchArgument("spawn_y", default_value="1.0"),
+            DeclareLaunchArgument("spawn_z", default_value="0.05"),
+            DeclareLaunchArgument("spawn_yaw", default_value="0.0"),
             DeclareLaunchArgument("localization_debug", default_value="true"),
             DeclareLaunchArgument(
                 "rviz_config",

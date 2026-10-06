@@ -1,9 +1,9 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, RegisterEventHandler
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, RegisterEventHandler, SetEnvironmentVariable
 from launch.conditions import IfCondition, UnlessCondition
 from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import Command, EnvironmentVariable, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
@@ -85,11 +85,13 @@ def generate_launch_description():
             "-allow_renaming",
             "false",
             "-x",
-            "0",
+            LaunchConfiguration("spawn_x"),
             "-y",
-            "0",
+            LaunchConfiguration("spawn_y"),
             "-z",
-            "0.0",
+            LaunchConfiguration("spawn_z"),
+            "-Y",
+            LaunchConfiguration("spawn_yaw"),
         ],
     )
 
@@ -242,16 +244,30 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "world",
                 default_value=PathJoinSubstitution(
-                    [FindPackageShare("wheel_arm_gazebo"), "worlds", "indoor_lab.sdf"]
+                    [FindPackageShare("wheel_arm_gazebo"), "worlds", "indoor_house.sdf"]
                 ),
             ),
             DeclareLaunchArgument("use_ekf", default_value="true"),
+            DeclareLaunchArgument("spawn_x", default_value="3.5"),
+            DeclareLaunchArgument("spawn_y", default_value="1.0"),
+            DeclareLaunchArgument("spawn_z", default_value="0.05"),
+            DeclareLaunchArgument("spawn_yaw", default_value="0.0"),
             DeclareLaunchArgument("localization_debug", default_value="false"),
             DeclareLaunchArgument(
                 "ekf_config",
                 default_value=PathJoinSubstitution(
                     [FindPackageShare("wheel_arm_gazebo"), "config", "ekf.yaml"]
                 ),
+            ),
+            SetEnvironmentVariable(
+                "IGN_GAZEBO_RESOURCE_PATH",
+                [PathJoinSubstitution([FindPackageShare("wheel_arm_gazebo"), "models"]),
+                 ":", EnvironmentVariable("IGN_GAZEBO_RESOURCE_PATH", default_value="")],
+            ),
+            SetEnvironmentVariable(
+                "GZ_SIM_RESOURCE_PATH",
+                [PathJoinSubstitution([FindPackageShare("wheel_arm_gazebo"), "models"]),
+                 ":", EnvironmentVariable("GZ_SIM_RESOURCE_PATH", default_value="")],
             ),
             gazebo,
             robot_state_publisher,

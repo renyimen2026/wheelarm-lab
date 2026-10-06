@@ -4,7 +4,7 @@ project(wheel_arm_gazebo)
 find_package(ament_cmake REQUIRED)
 
 install(
-  DIRECTORY config launch rviz worlds
+  DIRECTORY config launch rviz worlds models
   DESTINATION share/${PROJECT_NAME}
 )
 
