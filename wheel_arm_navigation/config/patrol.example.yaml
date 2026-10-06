@@ -1,0 +1,12 @@
+name: indoor_patrol
+goals:
+  - 厨房
+  - 餐厅
+  - 客厅
+  - 卧室
+  - 儿童房
+stay: 2.0
+timeout: 180.0
+wait: 10.0
+repeat: 1
+on_failure: stop

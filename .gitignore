@@ -6,11 +6,13 @@ log/
 # Generated maps and recordings
 maps/*.pgm
 maps/*.yaml
+mission_logs/
 *.bag
 *.db3
 
 # Python bytecode
 __pycache__/
+.pytest_cache/
 *.py[cod]
 
 # Editor and operating system files

@@ -3,7 +3,7 @@
   <name>wheel_arm_gazebo</name>
   <version>0.1.0</version>
   <description>Gazebo Fortress simulation launch files and worlds for wheel_arm.</description>
-  <maintainer email="user@example.com">user</maintainer>
+  <maintainer email="renyimen2026@foxmail.com">renyimen</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

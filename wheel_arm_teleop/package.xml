@@ -4,13 +4,14 @@
   <name>wheel_arm_teleop</name>
   <version>0.0.1</version>
   <description>Keyboard teleoperation for the wheel arm robot base and arm.</description>
-  <maintainer email="ppf@example.com">ppf</maintainer>
+  <maintainer email="renyimen2026@foxmail.com">renyimen</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_python</buildtool_depend>
 
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>rclpy</exec_depend>
+  <exec_depend>python3-tk</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>trajectory_msgs</exec_depend>
 

@@ -3,7 +3,7 @@
   <name>wheel_arm_description</name>
   <version>0.1.0</version>
   <description>Robot description for a simple wheeled mobile manipulator.</description>
-  <maintainer email="user@example.com">user</maintainer>
+  <maintainer email="renyimen2026@foxmail.com">renyimen</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
