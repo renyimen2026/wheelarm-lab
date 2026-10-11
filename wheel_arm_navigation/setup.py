@@ -9,7 +9,8 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
-        ("share/" + package_name + "/config", ["config/patrol.example.yaml"]),
+        ("share/" + package_name + "/config",
+         ["config/patrol.example.yaml", "config/llm_eval.yaml"]),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
@@ -21,5 +22,7 @@ setup(
     entry_points={"console_scripts": [
         "semantic_goal = wheel_arm_navigation.semantic_goal:main",
         "mission_runner = wheel_arm_navigation.mission_runner:main",
+        "language_goal = wheel_arm_navigation.language_goal:main",
+        "llm_eval = wheel_arm_navigation.llm_eval:main",
     ]},
 )

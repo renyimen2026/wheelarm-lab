@@ -58,7 +58,7 @@ def check_goals(plan, document):
 
 
 class Journal:
-    def __init__(self, directory, plan, document, goals_file):
+    def __init__(self, directory, plan, document, goals_file, source=None):
         directory = Path(directory).expanduser()
         directory.mkdir(parents=True, exist_ok=True)
         identifier = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid4().hex
@@ -80,6 +80,8 @@ class Journal:
                     for name in plan["goals"])
             ],
         }
+        if source is not None:
+            self.data["source"] = source
         self.flush()
 
     def flush(self):
@@ -108,10 +110,11 @@ class Journal:
                 temporary.unlink()
 
 
-def execute(plan, document, goals_file, log_dir, navigate, stopping, pause, progress):
+def execute(plan, document, goals_file, log_dir, navigate, stopping, pause, progress,
+            source=None):
     plan = validate_task(plan)
     check_goals(plan, document)
-    journal = Journal(log_dir, plan, document, goals_file)
+    journal = Journal(log_dir, plan, document, goals_file, source)
     progress(f"任务日志：{journal.path}")
     status = "completed"
     had_failure = False

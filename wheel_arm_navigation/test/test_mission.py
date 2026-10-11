@@ -136,3 +136,12 @@ def test_load_task(tmp_path):
     plan = load_task(path)
     assert plan["goals"] == ["客厅", "卧室"] and plan["stay"] == 1
     assert plan["on_failure"] == "stop"
+
+
+def test_language_source_is_logged(tmp_path):
+    source = {"kind": "local_llm", "instruction": "去客厅", "confirmed": True}
+    code, path = execute({"goals": ["客厅"]}, document(), "goals.yaml", tmp_path,
+                         lambda *_: outcome(), lambda: False, lambda _: True,
+                         lambda _: None, source=source)
+    log = json.loads(path.read_text(encoding="utf-8"))
+    assert code == 0 and log["source"] == source

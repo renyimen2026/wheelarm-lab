@@ -28,30 +28,21 @@ def parser():
     return result
 
 
-def main(args=None):
-    argv = sys.argv if args is None else ["mission_runner", *args]
-    options = parser().parse_args(remove_ros_args(argv)[1:])
+def run_plan(plan, document, goals_file, log_dir, argv, source=None):
+    """Execute a validated snapshot with the shared ROS cancellation lifecycle."""
     node = None
     handlers = {}
     try:
-        if options.task and options.goals:
-            raise ValueError("--task 与命令行目标列表不能混用")
-        task = load_task(options.task) if options.task else {"goals": options.goals}
-        for key in ("name", "stay", "timeout", "wait", "repeat", "on_failure"):
-            value = getattr(options, key)
-            if value is not None:
-                task[key] = value
-        plan = validate_task(task)
-        document = load(options.file)
+        plan = validate_task(plan)
         check_goals(plan, document)
         rclpy.init(args=argv, signal_handler_options=SignalHandlerOptions.NO)
         node = GoalClient("mission_runner")
         for signum in (signal.SIGINT, signal.SIGTERM):
             handlers[signum] = signal.signal(
                 signum, lambda *_: setattr(node, "stopping", True))
-        code, _ = execute(plan, document, options.file, options.log_dir,
+        code, _ = execute(plan, document, goals_file, log_dir,
                           node.navigate_pose, lambda: node.stopping, node.pause,
-                          node.get_logger().info)
+                          node.get_logger().info, source=source)
         return code
     except (OSError, ValueError, RuntimeError) as error:
         print(f"错误：{error}", file=sys.stderr)
@@ -63,3 +54,22 @@ def main(args=None):
             node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
+
+
+def main(args=None):
+    argv = sys.argv if args is None else ["mission_runner", *args]
+    options = parser().parse_args(remove_ros_args(argv)[1:])
+    try:
+        if options.task and options.goals:
+            raise ValueError("--task 与命令行目标列表不能混用")
+        task = load_task(options.task) if options.task else {"goals": options.goals}
+        for key in ("name", "stay", "timeout", "wait", "repeat", "on_failure"):
+            value = getattr(options, key)
+            if value is not None:
+                task[key] = value
+        plan = validate_task(task)
+        document = load(options.file)
+        return run_plan(plan, document, options.file, options.log_dir, argv)
+    except (OSError, ValueError, RuntimeError) as error:
+        print(f"错误：{error}", file=sys.stderr)
+        return 1
