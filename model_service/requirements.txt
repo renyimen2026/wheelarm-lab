@@ -1,0 +1,9 @@
+transformers==4.57.6
+numpy==1.26.4
+accelerate==1.6.0
+bitsandbytes==0.45.5
+xgrammar==0.1.21
+jsonschema==4.23.0
+Pillow==11.2.1
+huggingface-hub==0.36.0
+pytest==8.3.5

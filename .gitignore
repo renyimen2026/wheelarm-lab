@@ -8,6 +8,7 @@ maps/*.pgm
 maps/*.yaml
 mission_logs/
 evaluation_logs/
+observations/
 *.bag
 *.db3
 

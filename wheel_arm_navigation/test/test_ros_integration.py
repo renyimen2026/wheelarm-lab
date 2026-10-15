@@ -32,7 +32,7 @@ def server():
     broadcaster = TransformBroadcaster(node)
     clock = node.create_publisher(Clock, "/clock", 10)
     state = {"poses": [], "canceled": threading.Event(), "accepted": threading.Event(),
-             "tf_age": 0.0, "closing": False}
+             "finished": threading.Event(), "tf_age": 0.0, "closing": False}
 
     def tick():
         stamp = node.get_clock().now().to_msg()
@@ -52,16 +52,18 @@ def server():
         state["poses"].append(handle.request.pose)
         state["accepted"].set()
         deadline = time.monotonic() + (
-            15 if handle.request.pose.pose.position.x in (3, 5) else 0.2)
+            15 if handle.request.pose.pose.position.x in (3, 5) else state.get("duration", 0.2))
         while time.monotonic() < deadline:
             if state["closing"]:
                 handle.abort()
                 return NavigateToPose.Result()
             if handle.is_cancel_requested:
                 state["canceled"].set()
+                state["finished"].set()
                 handle.canceled()
                 return NavigateToPose.Result()
             time.sleep(0.02)
+        state["finished"].set()
         if handle.request.pose.pose.position.x == 2:
             handle.abort()
         else:

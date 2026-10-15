@@ -5,6 +5,7 @@ from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, EnvironmentVariable, LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -48,7 +49,7 @@ def generate_launch_description():
         namespace="wheel_arm",
         output="screen",
         parameters=[
-            {"robot_description": robot_description_content},
+            {"robot_description": ParameterValue(robot_description_content, value_type=str)},
             {"use_sim_time": use_sim_time},
         ],
         condition=IfCondition(use_ekf),
@@ -60,7 +61,7 @@ def generate_launch_description():
         namespace="wheel_arm",
         output="screen",
         parameters=[
-            {"robot_description": raw_odom_robot_description_content},
+            {"robot_description": ParameterValue(raw_odom_robot_description_content, value_type=str)},
             {"use_sim_time": use_sim_time},
         ],
         condition=UnlessCondition(use_ekf),
@@ -138,9 +139,20 @@ def generate_launch_description():
         output="screen",
         arguments=[
             "/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock",
-            "/camera/image@sensor_msgs/msg/Image[gz.msgs.Image",
-            "/camera/image/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo",
         ],
+    )
+
+    camera_bridge = Node(
+        package="ros_gz_bridge",
+        executable="parameter_bridge",
+        name="camera_bridge",
+        output="screen",
+        arguments=[
+            "/camera/image@sensor_msgs/msg/Image[gz.msgs.Image",
+            "/camera/depth_image@sensor_msgs/msg/Image[gz.msgs.Image",
+            "/camera/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo",
+        ],
+        parameters=[{"override_frame_id": "camera_optical_frame"}],
     )
 
     ekf_node = Node(
@@ -277,6 +289,7 @@ def generate_launch_description():
             imu_bridge,
             imu_covariance_node,
             bridge,
+            camera_bridge,
             ekf_node,
             localization_debug_node,
             start_controllers_after_spawn,

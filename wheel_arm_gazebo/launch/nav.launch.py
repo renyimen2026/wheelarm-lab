@@ -7,6 +7,16 @@ from launch_ros.actions import Node, SetRemap
 from launch_ros.substitutions import FindPackageShare
 
 
+BASE_COMMAND_TOPIC = "/wheel_arm/diff_drive_base_controller/cmd_vel_unstamped"
+# Scoped rules precede upstream remaps without merging smoother input and output.
+NAV2_VELOCITY_REMAPPINGS = [
+    ("controller_server:cmd_vel", "/cmd_vel_nav"),
+    ("velocity_smoother:cmd_vel", "/cmd_vel_nav"),
+    ("velocity_smoother:cmd_vel_smoothed", BASE_COMMAND_TOPIC),
+    ("behavior_server:cmd_vel", BASE_COMMAND_TOPIC),
+]
+
+
 def generate_launch_description():
     use_sim_time = LaunchConfiguration("use_sim_time")
     world = LaunchConfiguration("world")
@@ -37,14 +47,7 @@ def generate_launch_description():
     def make_nav2_bringup(selected_params_file, condition):
         return GroupAction(
             [
-                SetRemap(
-                    src="/cmd_vel",
-                    dst="/wheel_arm/diff_drive_base_controller/cmd_vel_unstamped",
-                ),
-                SetRemap(
-                    src="/cmd_vel_smoothed",
-                    dst="/wheel_arm/diff_drive_base_controller/cmd_vel_unstamped",
-                ),
+                *[SetRemap(src=src, dst=dst) for src, dst in NAV2_VELOCITY_REMAPPINGS],
                 IncludeLaunchDescription(
                     PythonLaunchDescriptionSource(
                         [FindPackageShare("nav2_bringup"), "/launch/bringup_launch.py"]

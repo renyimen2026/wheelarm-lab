@@ -139,6 +139,9 @@ class GoalClient(Node):
         finally:
             client.destroy()
 
+    def on_goal_accepted(self, name):
+        pass
+
     def _navigate(self, client, name, pose, frame_id, wait, timeout):
         deadline = time.monotonic() + wait
         while not client.server_is_ready():
@@ -180,6 +183,11 @@ class GoalClient(Node):
             return NavigationResult("rejected", "Nav2 拒绝目标点")
         self.get_logger().info(f"开始导航到 {name}")
         result_future = handle.get_result_async()
+        if not self.stopping:
+            try:
+                self.on_goal_accepted(name)
+            except Exception as error:
+                self.get_logger().warn(f"导航接受后的可选任务失败，继续导航：{error}")
         if not self.wait(result_future, timeout) or self.stopping:
             confirmed = self.cancel(handle, result_future)
             return NavigationResult(

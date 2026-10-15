@@ -15,4 +15,10 @@ install(
   DESTINATION lib/${PROJECT_NAME}
 )
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_pytest REQUIRED)
+  ament_add_pytest_test(initial_pose test/test_initial_pose.py)
+  ament_add_pytest_test(initial_pose_ros test/test_initial_pose_ros.py)
+endif()
+
 ament_package()

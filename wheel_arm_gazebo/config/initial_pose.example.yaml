@@ -1,0 +1,6 @@
+# Replace these example numbers with a verified base_footprint pose in your saved map.
+# This file does NOT specify the Gazebo spawn position.
+frame_id: map
+x: 0.0
+y: 0.0
+yaw: 0.0

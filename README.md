@@ -1,620 +1,400 @@
 # WheelArm Lab
 
-一个面向 ROS 2 的开源轮臂式机器人仿真平台，用于移动操作、2D SLAM、Nav2 导航与具身智能算法实验。
+面向 ROS 2 的开源轮臂机器人仿真与具身智能实验平台。
 
-项目基于 ROS 2 Humble 和 Gazebo Fortress 构建。它提供可运行的差速轮式底盘、4 自由度机械臂、2D 激光雷达、IMU、RGB 相机、`ros2_control` 控制、状态估计、SLAM、导航和键盘遥控基础设施。后续将围绕视觉语言导航（VLN）和视觉语言动作（VLA）持续扩展。
+基于 **Ubuntu 22.04、ROS 2 Humble、Gazebo Fortress**，提供差速底盘、4 自由度
+机械臂、室内场景，以及从遥控、建图导航到本地语言指令和视觉问答的完整实验流程。
+项目持续维护，后续面向视觉语言导航（VLN）和视觉语言动作（VLA）扩展。
 
-历次功能和配置变化见 [更新记录](CHANGELOG.md)。
+当前语言导航基于**已记录的命名目标点**，视觉功能基于**单帧 RGB 问答**；
+尚不具备完整 VLN、自主物体搜索或语言驱动抓取能力。
 
-## 功能概览
+[快速开始](#快速开始) · [建图与导航](#建图与导航) · [语言与视觉任务](#语言与视觉任务) ·
+[参数与排错](docs/reference.md) · [模型服务](model_service/README.md) · [更新记录](CHANGELOG.md)
 
-- 差速轮式移动底盘与 4 自由度机械臂
-- 2D LiDAR、IMU、RGB 相机等仿真传感器
-- `ros2_control`：底盘差速控制器和机械臂轨迹控制器
-- `robot_localization`：轮速里程计与 IMU 融合
-- `slam_toolbox`：2D 激光建图与回环优化
-- Nav2：全局路径规划、局部避障与目标点导航
-- 带贴图家具的住宅室内场景与预配置 RViz
-- 键盘遥控底盘和机械臂关节
-- 命名目标点记录与 Nav2 导航（语义导航基础接口）
-- 多点顺序任务、停留与循环执行、任务结果日志
-- 本地 Ollama 自然语言任务解析、任务预览与执行确认
-- LLM 指令回归评测、分类统计与可追溯 JSON 报告
+## 能做什么
 
-## 环境要求
-
-| 项目 | 版本 |
+| 模块 | 当前能力 |
 | --- | --- |
-| Ubuntu | 22.04 |
-| ROS 2 | Humble |
-| Gazebo | Fortress |
+| 机器人与控制 | 差速底盘、4 自由度机械臂、`ros2_control`、键盘组合键遥控 |
+| 感知与状态估计 | 2D LiDAR、IMU、RGB-D 相机、轮速里程计与 IMU 的 EKF 融合 |
+| 建图与导航 | `slam_toolbox` 建图与回环、AMCL 固定地图定位、Nav2 规划与避障 |
+| 任务执行 | 命名目标点、顺序多点任务、任务配置、取消处理与执行日志 |
+| 自然语言 | 本地 LLM 解析导航或单点观察任务，预览、人工确认与回归评测 |
+| 视觉观察 | 实时单帧问答、离线重放、导航后停稳拍摄、同步 RGB-D 观测保存 |
+| 模型后端 | 独立 PyTorch CUDA 服务或 Ollama；CUDA 后端支持导航途中加载视觉模型 |
 
-安装基础依赖：
+默认场景为带家具和贴图的住宅，基于 AWS RoboMaker Small House World。
+资产随仓库提供，运行仿真时无需在线下载；来源与许可证见
+[场景资产说明](wheel_arm_gazebo/models/README.md)。
+
+## 快速开始
+
+### 1. 准备环境
+
+先安装 Ubuntu 22.04 和 ROS 2 Humble，再安装仿真及导航依赖：
 
 ```bash
 sudo apt update
 sudo apt install \
-  ros-humble-ros-gz \
-  ros-humble-gz-ros2-control \
-  ros-humble-ros2-controllers \
-  ros-humble-navigation2 \
-  ros-humble-nav2-bringup \
-  ros-humble-slam-toolbox \
-  ros-humble-robot-localization \
-  python3-tk
+  python3-colcon-common-extensions python3-rosdep python3-tk \
+  ros-humble-ros-gz ros-humble-gz-ros2-control ros-humble-ros2-controllers \
+  ros-humble-navigation2 ros-humble-nav2-bringup ros-humble-slam-toolbox \
+  ros-humble-robot-localization
 ```
 
-## 快速开始
+基础仿真和导航不需要语言模型、GPU 推理环境或云端 API 密钥。
+Gazebo、RViz 和键盘窗口需要桌面显示环境。
 
-创建 ROS 2 工作空间并克隆本仓库：
+### 2. 获取并构建
 
 ```bash
 mkdir -p ~/wheelarm_ws/src
 cd ~/wheelarm_ws/src
 git clone https://github.com/renyimen2026/wheelarm-lab.git
 cd ..
-```
 
-安装依赖并编译：
-
-```bash
 source /opt/ros/humble/setup.bash
 rosdep install --from-paths src --ignore-src -r -y
 colcon build --symlink-install
 source install/setup.bash
 ```
 
-启动基础仿真：
+如果系统尚未初始化 rosdep，先执行一次 `sudo rosdep init` 和 `rosdep update`。
 
-```bash
-ros2 launch wheel_arm_gazebo sim.launch.py
-```
+**目录约定：**后续 ROS 命令均在工作空间根目录 `wheelarm_ws/` 执行；
+每个新 ROS 终端都需要加载 ROS 和 `install/setup.bash`。
+模型服务命令在仓库目录 `src/wheelarm-lab/` 执行，使用独立 conda 环境，
+不要将模型依赖安装到 ROS Python 环境。
 
-启动 Gazebo、SLAM、Nav2 与 RViz：
+### 3. 启动仿真
+
+选择一个入口运行，不要重复启动同一套仿真：
+
+| 入口 | 命令 | 用途 |
+| --- | --- | --- |
+| 基础仿真 | `ros2 launch wheel_arm_gazebo sim.launch.py` | 模型、传感器与控制器实验 |
+| 在线建图导航 | `ros2 launch wheel_arm_gazebo nav.launch.py` | Gazebo、SLAM、Nav2、RViz |
+| 固定地图导航 | `ros2 launch wheel_arm_gazebo nav_localization.launch.py map:=maps/wheel_arm_map.yaml` | 使用自己保存的地图和 AMCL 定位 |
+
+第一次使用建议从在线建图开始。**仓库不包含已经建好的地图和预置目标点**，
+需要先建图，再使用固定地图和命名点任务。
+
+## 建图与导航
+
+### 遥控探索并保存地图
 
 ```bash
 ros2 launch wheel_arm_gazebo nav.launch.py
 ```
 
-`nav.launch.py` 默认使用 EKF 融合后的里程计，并自动加载 RViz 配置。
-
-### 升级已有工作空间
-
-本次增加 `wheel_arm_navigation` 和 Tk 键盘窗口，旧版终端遥控方式已替换。
-在工作空间根目录安装新增依赖并编译：
-
-```bash
-source /opt/ros/humble/setup.bash
-rosdep install --from-paths src --ignore-src -r -y
-colcon build --symlink-install --packages-select \
-  wheel_arm_control wheel_arm_teleop wheel_arm_navigation
-source install/setup.bash
-```
-
-关闭旧遥控和导航任务，并重启仿真使新的底盘控制器限制生效。
-`command_hold_time` 已移除；已有启动脚本应删除该参数，改用键盘窗口的松键事件。
-已有地图可继续使用，同一地图的目标点也可复用；切换地图后应重新核对目标位置。
-
-## 仿真场景
-
-默认加载 `indoor_house.sdf`：基于 AWS RoboMaker Small House World 的现成
-住宅场景，包含卧室、客厅、厨房、家具和家电。世界文件已适配 Gazebo Fortress，
-模型与贴图保存在本仓库，运行时无需联网下载。机器人默认出生位置为
-`x=3.5, y=1.0, z=0.05, yaw=0`，坐标单位为米，角度单位为弧度。
-
-可以通过 `spawn_x`、`spawn_y`、`spawn_z` 和 `spawn_yaw` 设置出生位姿：
-
-```bash
-ros2 launch wheel_arm_gazebo nav.launch.py spawn_x:=3.5 spawn_y:=1.0
-```
-
-原有实验室场景仍可选择：
-
-```bash
-ros2 launch wheel_arm_gazebo nav.launch.py \
-  world:=src/wheelarm-lab/wheel_arm_gazebo/worlds/indoor_lab.sdf \
-  spawn_x:=0 spawn_y:=0 spawn_z:=0
-```
-
-上述相对路径命令在工作空间根目录执行。切换场景后需重新建图，旧场景地图不能复用。
-住宅资产来源和独立许可证见 [模型说明](wheel_arm_gazebo/models/README.md)。
-该场景尚未附带 VLN 任务或语义标注。
-
-## 项目结构
-
-```text
-wheelarm-lab/
-├── wheel_arm_description/  # xacro/URDF 机器人模型、传感器与 Gazebo 插件
-├── wheel_arm_control/      # ros2_control 控制器配置
-├── wheel_arm_gazebo/       # 仿真世界、launch、EKF、Nav2、RViz 配置
-├── wheel_arm_teleop/       # 键盘遥控节点
-└── wheel_arm_navigation/   # 命名目标点、自然语言解析、顺序任务与执行日志
-```
-
-## 键盘遥控
-
-启动仿真后，在本地桌面另一个已加载工作空间环境的终端中运行：
+另开 ROS 终端启动键盘窗口，点击窗口获取焦点后操作：
 
 ```bash
 ros2 run wheel_arm_teleop keyboard_teleop
 ```
 
-命令打开独立键盘窗口，点击窗口使其获得焦点后操作。
-按住移动、松开对应按键立即发布该方向的零速度，失去焦点则停止所有底盘运动。
-不再通过终端字符和按键超时推测松键，因此需要桌面显示环境；不支持纯 SSH 终端操作。
-缺少 Tk 时安装 `sudo apt install python3-tk`。
-
-| 按键 | 功能 |
+| 按键 | 操作 |
 | --- | --- |
 | `W` / `S` | 前进 / 后退 |
-| `A` / `D` | 左转 / 右转 |
-| `W+A` / `W+D` | 前进同时左转 / 右转 |
-| `S+A` / `S+D` | 后退同时左转 / 右转 |
+| `A` / `D` | 左转 / 右转，可与前后移动组合 |
 | `Space` | 停止底盘 |
-| `Q` / `E` | `shoulder_pan_joint` 正向 / 反向 |
-| `R` / `F` | `shoulder_lift_joint` 正向 / 反向 |
-| `T` / `G` | `elbow_joint` 正向 / 反向 |
-| `Y` / `H` | `wrist_pitch_joint` 正向 / 反向 |
+| `Q` / `E` | 肩部水平关节正向 / 反向 |
+| `R` / `F` | 肩部俯仰关节正向 / 反向 |
+| `T` / `G` | 肘关节正向 / 反向 |
+| `Y` / `H` | 腕部俯仰关节正向 / 反向 |
 | `X` | 机械臂回零 |
 | `Esc` / `Ctrl+C` / 关闭窗口 | 停止底盘并退出 |
 
-组合键按各轴独立处理：松开 `W` 但仍按住 `A` 时，停止前进并继续转向。
-同轴反向按键（`W+S`、`A+D`）相互抵消。空格或窗口停止按钮会解除当前移动键，
-需要先松开这些键再重新按下才能继续，防止键盘自动重复导致意外恢复运动。
-
-默认线速度为 `0.5 m/s`，角速度为 `1.0 rad/s`，速度指令以 `50 Hz` 发布，
-按键状态变化时也立即发布；机械臂每次按键的关节增量为 `0.05 rad`，
-持续按住机械臂按键时默认每秒重复 5 次，可通过 `arm_repeat_rate` 调整。
-可以在启动时覆盖速度参数，无需修改源码，例如：
+按住移动、松键发送停止指令，失焦时停止底盘。车体仍受惯性和加减速限制影响，
+不会瞬时静止。默认线速度 `0.5 m/s`、角速度 `1.0 rad/s`；初次建图可用下面的
+低速命令替代上面的遥控命令，不要同时运行两个遥控窗口：
 
 ```bash
 ros2 run wheel_arm_teleop keyboard_teleop --ros-args \
   -p linear_speed:=0.15 -p angular_speed:=0.45
 ```
 
-使用 Nav2 自主导航时，请停止键盘遥控和其他速度发布命令，避免多个节点同时控制底盘。
-需要退出键盘程序，不能只切换窗口：失去焦点时遥控仍持续发布零速度作为安全保护。
-
-底盘控制器保留速度与加减速限制。当前线加速度限制为 `±2.0 m/s²`，
-角加速度限制为 `±3.0 rad/s²`，控制指令断流 `0.2 s` 后触发超时停止。
-松键会立即发送停止指令，但物理车体仍需减速；理想限制下，从 `0.5 m/s` 降到零约需
-`0.25 s`，实际还受仿真接触和惯性影响，不保证瞬时静止。
-上述控制器限制同样影响自主导航，不只影响遥控；修改后需重新构建 `wheel_arm_control`
-并重启仿真使控制器重新加载参数。
-
-```bash
-colcon build --symlink-install --packages-select wheel_arm_teleop wheel_arm_control
-source install/setup.bash
-```
-
-## 里程计与定位
-
-默认启动的 EKF 以轮速里程计提供车体速度和非完整约束，以 IMU 提供航向角与角速度：
-
-```text
-/wheel_arm/diff_drive_base_controller/odom  -> 原始轮速里程计
-/imu                                         -> IMU
-/odometry/filtered                           -> EKF 融合里程计
-odom -> base_footprint                       -> EKF 发布的 TF
-```
-
-需要直接使用原始轮速里程计进行对比时：
-
-```bash
-ros2 launch wheel_arm_gazebo nav.launch.py use_ekf:=false
-```
-
-## 常用操作
-
-不启动 RViz：
-
-```bash
-ros2 launch wheel_arm_gazebo nav.launch.py rviz:=false
-```
-
-关闭定位诊断日志：
-
-```bash
-ros2 launch wheel_arm_gazebo nav.launch.py localization_debug:=false
-```
-
-手动控制底盘：
-
-```bash
-ros2 topic pub /wheel_arm/diff_drive_base_controller/cmd_vel_unstamped \
-  geometry_msgs/msg/Twist \
-  "{linear: {x: 0.15}, angular: {z: 0.3}}"
-```
-
-发送机械臂轨迹：
-
-```bash
-ros2 topic pub /wheel_arm/arm_controller/joint_trajectory \
-  trajectory_msgs/msg/JointTrajectory \
-  "{joint_names: [shoulder_pan_joint, shoulder_lift_joint, elbow_joint, wrist_pitch_joint], points: [{positions: [0.0, 0.4, -0.8, 0.3], time_from_start: {sec: 2}}]}"
-```
-
-保存当前 SLAM 地图：
+探索完成后，在另一个终端保存地图：
 
 ```bash
 mkdir -p maps
 ros2 run nav2_map_server map_saver_cli -f maps/wheel_arm_map
 ```
 
-## 固定地图定位与导航
+确认生成 `maps/wheel_arm_map.yaml` 和 `maps/wheel_arm_map.pgm`，再关闭建图启动进程。
 
-先使用在线 SLAM 完成建图并保存地图，再关闭建图启动进程。
-在工作空间根目录启动固定地图模式（不要与建图模式同时运行）：
-
-```bash
-source install/setup.bash
-ros2 launch wheel_arm_gazebo nav_localization.launch.py map:=maps/wheel_arm_map.yaml
-```
-
-该入口启动 Gazebo、EKF、地图服务器、AMCL、Nav2 和 RViz。
-地图服务器加载已保存地图，AMCL 根据 `/scan` 和里程计 TF 发布 `map -> odom`，
-EKF 继续发布 `odom -> base_footprint`。该模式不启动 `slam_toolbox`，也不修改保存的地图。
-局部和全局代价地图仍会根据激光观测更新障碍物。
-
-在 RViz 中使用 `2D Pose Estimate`，在地图上点击机器人所在位置，拖动指定朝向。
-收到初始位姿后，AMCL 才能建立全局定位；在此之前机器人可能不显示，
-Nav2 会提示等待 `map -> odom` TF。确认激光与墙体基本重合后，再设置导航目标。
-
-如果出现 `AMCL cannot publish a pose ... Please set the initial pose`、
-`Invalid frame ID "map"` 或 RViz 消息队列已满，先确认保存地图已显示，
-再设置初始位姿。若设置后提示仍持续出现，应检查初始位置、朝向和定位 TF。
-
-地图坐标与 Gazebo 世界坐标可能不同，`spawn_x` / `spawn_y` 不能直接当作 AMCL 初始位姿。
-建议先使用与建图时相同的出生位姿，用地图中的房间和家具辨认当前位置。
-
-关闭 RViz 或使用原始轮速计也可通过参数选择：
+### 加载地图并自主导航
 
 ```bash
 ros2 launch wheel_arm_gazebo nav_localization.launch.py \
-  map:=maps/wheel_arm_map.yaml rviz:=false use_ekf:=false
+  map:=maps/wheel_arm_map.yaml
 ```
 
-地图路径不存在时，启动文件会提前报错。自定义地图必须与当前场景一致，
-并保留 YAML 引用的图片文件。
+在 RViz 使用 **2D Pose Estimate** 设置当前位置和朝向，确认激光与墙体基本重合，
+再通过目标点工具发送导航目标。该模式不启动 SLAM，不修改保存的地图；
+局部和全局代价地图仍根据激光观测更新障碍物。
 
-地图默认保存到工作空间的 `maps/` 目录，属于本地生成数据，不随源码仓库分发。
-首次克隆项目后，需要先建图并保存地图，再运行固定地图模式。
+**自主导航前必须退出键盘遥控和其他速度发布程序，不要只切换窗口。**
+遥控窗口失焦后仍会持续发送零速度，多个程序同时控制底盘会互相干扰。
 
-## 语义目标点导航
+### 使用启动位姿先验
 
-语义目标点是保存地图中带名称的可通行位置，例如“客厅”或“厨房入口”。
-当前提供名称到地图位姿的映射，不包含语言模型、自动物体识别或完整 VLN 算法。
-
-更新代码后重新编译：
+固定地图和出生位置不变时，可保存一份已经验证的地图坐标系位姿：
 
 ```bash
-colcon build --symlink-install --packages-select wheel_arm_navigation
-source install/setup.bash
+cp src/wheelarm-lab/wheel_arm_gazebo/config/initial_pose.example.yaml maps/initial_pose.yaml
 ```
 
-先启动上述固定地图导航并设置初始位姿。用 RViz 导航或键盘将机器人移动到
-需要记录的位置，确认激光与地图对齐、机器人已停止后，在另一终端记录当前位置：
+编辑该文件中的 `x`、`y`、`yaw` 后启动：
 
 ```bash
-ros2 run wheel_arm_navigation semantic_goal save 客厅 --ros-args -p use_sim_time:=true
-ros2 run wheel_arm_navigation semantic_goal save 厨房入口 --ros-args -p use_sim_time:=true
+ros2 launch wheel_arm_gazebo nav_localization.launch.py \
+  map:=maps/wheel_arm_map.yaml initial_pose_file:=maps/initial_pose.yaml
 ```
 
-默认读取 `map -> base_footprint`，保存到工作空间根目录的 `maps/semantic_goals.yaml`。
-请在同一工作空间根目录执行命令；多个终端不要同时写入同一目标点文件。
-名称重复时拒绝覆盖，如需更新位置，添加 `--overwrite`。
+示例坐标不能直接使用，Gazebo 世界坐标也不一定等于地图坐标。
+先验只是 AMCL 初始化，不是自动重定位；定位不正确时，停止任务后仍可在 RViz 手动修正。
+坐标获取、命令行先验及文件格式见[定位参数](docs/reference.md#定位与启动位姿)。
 
-列出目标点和按名称导航：
+## 命名点与顺序任务
+
+先启动固定地图导航、完成定位，再将机器人移动到希望保存的位置并停稳。
+例如到达厨房后，记录当前位置和朝向：
 
 ```bash
+ros2 run wheel_arm_navigation semantic_goal save 厨房 --ros-args -p use_sim_time:=true
+```
+
+用同样方式分别记录“卧室”“客厅”等位置，不要在同一位置连续保存多个房间名称。
+默认文件为 `maps/semantic_goals.yaml`。名称必须精确匹配，不自动处理别名；
+重复名称默认拒绝覆盖，可添加 `--overwrite` 更新。
+
+```bash
+# 查看所有名称和坐标
 ros2 run wheel_arm_navigation semantic_goal list
-ros2 run wheel_arm_navigation semantic_goal go 客厅 --ros-args -p use_sim_time:=true
-```
 
-导航时停止键盘遥控，不要同时在 RViz 发送目标。终端输出剩余距离与执行结果；
-`Ctrl+C` 请求取消，默认超过 180 秒请求取消，可用 `go 客厅 --timeout 300` 修改。
-若日志提示取消未确认，必须检查 Nav2 状态及机器人是否停止。
-仿真中的 `save` 和 `go` 命令需要 `use_sim_time:=true`，使用与 TF 相同的仿真时钟。
+# 导航到一个已记录地点
+ros2 run wheel_arm_navigation semantic_goal go 厨房 --ros-args -p use_sim_time:=true
 
-也可直接输入 RViz 地图坐标（米、弧度），不能使用 Gazebo 世界坐标代替：
-
-```bash
-ros2 run wheel_arm_navigation semantic_goal set 客厅 --x 1.0 --y 2.0 --yaw 0.0
-ros2 run wheel_arm_navigation semantic_goal --file maps/semantic_goals.yaml list
-```
-
-上面的手动坐标仅演示格式，不是本住宅场景的预置目标。应选择可通行空地，
-为底盘和机械臂留出避障空间。目标点文件结构如下：
-
-```yaml
-frame_id: map
-goals:
-  客厅:
-    x: 1.0
-    y: 2.0
-    yaw: 0.0
-```
-
-目标点与当前地图绑定，切换场景或重新建图后应重新记录，不可盲目复用旧坐标。
-这些文件属于本地生成数据，不随仓库分发。
-
-## 多点导航任务
-
-先启动固定地图导航、完成初始定位，并记录路线中所有目标点。
-更新后重新编译 `wheel_arm_navigation` 并加载 `install/setup.bash`，在工作空间根目录执行：
-
-```bash
-ros2 run wheel_arm_navigation mission_runner 客厅 厨房入口 卧室 客厅 \
-  --stay 2 --ros-args -p use_sim_time:=true
-```
-
-执行器按顺序逐个调用 Nav2，到达每个目标后停留 2 秒，再发送下一个目标。
-启动前检查整条路线，只要有名称未记录，就拒绝启动，不会先走部分路线。
-支持目标名称重复；执行中使用启动时读取的坐标快照。
-任务运行期间不要同时启动键盘遥控、其他任务或在 RViz 中发送导航目标。
-
-| 参数 | 默认值 | 含义 |
-| --- | --- | --- |
-| `--file` | `maps/semantic_goals.yaml` | 已记录的目标点文件 |
-| `--stay` | `0` | 每个成功目标后的停留秒数，包含最后一个目标 |
-| `--timeout` | `180` | 每个目标接受后的最大等待秒数 |
-| `--wait` | `10` | 等待 Nav2、仿真时钟及目标应答的超时秒数 |
-| `--repeat` | `1` | 整条路线的执行轮数 |
-| `--on-failure` | `stop` | 失败后停止；`skip` 则继续后续目标 |
-| `--log-dir` | `mission_logs` | JSON 执行日志目录 |
-| `--name` | `navigation_task` | 日志中的任务名称 |
-
-例如循环两轮，允许跳过已确认结束的失败目标：
-
-```bash
-ros2 run wheel_arm_navigation mission_runner 客厅 卧室 客厅 \
-  --repeat 2 --stay 1 --on-failure skip --ros-args -p use_sim_time:=true
-```
-
-`Ctrl+C` 会请求取消当前导航，或中断停留，并停止后续目标。
-超时后请求取消，只有收到目标终态才允许跳过。
-Nav2 不可用、通信异常或取消后目标结束未确认时，无论策略如何都停止任务。
-停留、超时和日志耗时按实际经过的时间计量，不随仿真暂停而停止计时。
-
-### 保存任务配置
-
-可以将固定路线写成 YAML。仓库提供 `wheel_arm_navigation/config/patrol.example.yaml`：
-
-```yaml
-name: indoor_patrol
-goals: [客厅, 厨房入口, 卧室, 客厅]
-stay: 2.0
-timeout: 180.0
-wait: 10.0
-repeat: 1
-on_failure: stop
-```
-
-示例只定义名称，不提供住宅场景的预置坐标；必须先记录对应目标点。
-运行该配置：
-
-```bash
-ros2 run wheel_arm_navigation mission_runner \
-  --task src/wheelarm-lab/wheel_arm_navigation/config/patrol.example.yaml \
+# 按顺序访问多个已记录地点
+ros2 run wheel_arm_navigation mission_runner 厨房 卧室 客厅 \
   --ros-args -p use_sim_time:=true
 ```
 
-`--task` 不能与命令行目标列表混用；`--stay` 等命令行参数可以覆盖配置中的值。
+目标点与地图绑定，换场景或重新建图后应重新核对。默认导航失败即停止，
+`Ctrl+C` 请求取消；取消终态未确认时，必须人工检查机器人是否停止。
+任务配置、循环、停留及失败策略见[任务参数](docs/reference.md#目标点与任务配置)。
 
-### 执行日志
+## 语言与视觉任务
 
-每次任务创建独立的 `mission_logs/<UTC时间>-<唯一ID>.json`，开始导航前确认日志可写。
-日志记录任务配置、目标坐标快照、总体状态、成功和失败数量，以及每一步的：
+### 选择模型服务
 
-- 目标名称、轮次和顺序。
-- 开始/结束时间、导航耗时和实际停留时长。
-- 导航状态、失败原因、Nav2 action 状态码（若收到）及是否允许继续。
+机器人与模型服务分开运行，通过本机 HTTP 接口调用模型。选择一种后端即可：
 
-任务状态包括 `completed`、`completed_with_failures`、`failed`、`canceled` 和
-`unsafe_stop`，异常退出还可能记录为 `error`。有失败但跳过后走完整条路线，
-仍返回非零退出码，不会将部分成功报告为全部成功。
-未执行目标标记为 `not_run`；每一步前后更新日志，强制终止进程时可能保留 `running`，
-这表示结果未确认，不代表任务成功。当前不支持断点恢复。
-日志属于本地运行数据，默认不提交到 Git；Nav2 返回成功也不等于已验证真实定位精度。
+| 后端 | 接口地址 | 准备方式 |
+| --- | --- | --- |
+| Python CUDA 服务 | `http://127.0.0.1:11435` | 独立 PyTorch CUDA 环境、Transformers 权重；见[安装与启动](model_service/README.md) |
+| Ollama | `http://127.0.0.1:11434` | 安装本机 Ollama，下载下列模型并保持服务运行 |
 
-## 本地自然语言导航
-
-使用 Ollama 将中文指令解析成已有命名目标点的顺序任务，再复用 `mission_runner`
-的 Nav2 执行和取消逻辑。无需云端 API 密钥，也没有规则解析或目标别名。
-模型只接收目标名称，不生成坐标；坐标始终从当前目标点文件读取。
-这属于语言驱动的命名点导航，尚不是使用相机理解环境的 VLN。
-
-### 准备模型
-
-按 [Ollama 官方说明](https://docs.ollama.com/linux) 安装并启动本地服务，然后下载模型：
+Ollama 模型准备：
 
 ```bash
 ollama pull qwen3:4b
-ollama list
+ollama pull qwen3-vl:4b-instruct
 ```
 
-模型是系统级资源，不随仓库分发；保存位置由 Ollama 服务的 `OLLAMA_MODELS`
-环境变量配置，可以使用用户的 `Models` 目录。需要保证服务用户有目录访问权限。
-CPU 推理可用，但耗时较长；使用 GPU 前需确认当前 Ollama 与显卡驱动兼容。
+使用 Ollama 时，应在服务环境设置 `OLLAMA_NO_CLOUD=1` 并使用已下载的本地模型，
+不要使用远程模型别名；本机 HTTP 地址本身不保证模型在本机运行。
 
-在工作空间根目录构建新增入口：
+Python CUDA 服务准备完成后，在**仓库目录、模型 conda 环境**中启动：
 
 ```bash
-colcon build --symlink-install --packages-select wheel_arm_navigation
-source install/setup.bash
+env -u PYTHONPATH PYTHONNOUSERSITE=1 \
+  CUDA_VISIBLE_DEVICES=0 MKL_THREADING_LAYER=GNU \
+  python -m model_service.server
 ```
 
-### 预览和执行
+默认启动预加载语言模型。保持此终端运行，另外使用 ROS 终端操作机器人。
+Transformers 权重默认保存在 `~/Models/transformers`，不能直接复用 Ollama 的 GGUF 文件。
 
-先确认 `maps/semantic_goals.yaml` 已记录指令中使用的目标。
-仅解析预览时，不需要启动仿真或 Nav2：
+**下面示例统一使用 Python CUDA 服务。** CLI 默认地址仍是 Ollama `11434`，
+使用 CUDA 服务必须显式指定 `--endpoint http://127.0.0.1:11435`；
+使用 Ollama 时去掉此参数即可。接口仅允许本机访问，不需要云端密钥。
+GPU 是否可用应通过后端日志验证，不能只根据某一个环境变量判断。
+
+### 用自然语言导航
+
+前提是指令中的名称都已记录。先预览，不需要启动仿真或 Nav2：
 
 ```bash
-ros2 run wheel_arm_navigation language_goal \
-  "先去卧室，再去厨房，最后去客厅" --preview
+ros2 run wheel_arm_navigation language_goal "先去厨房，再去卧室，最后去客厅" \
+  --endpoint http://127.0.0.1:11435 --preview
 ```
 
-执行时先启动固定地图导航，在 RViz 设置初始位姿，确认定位正常，并退出键盘遥控。
-在另一个已加载工作空间环境的终端运行：
+确认解析正确后，启动固定地图导航、完成定位并退出遥控，再去掉 `--preview`：
 
 ```bash
-ros2 run wheel_arm_navigation language_goal \
-  "先去卧室，再去厨房，最后去客厅，每到一个点停留2秒" \
+ros2 run wheel_arm_navigation language_goal "先去厨房，再去卧室，最后去客厅" \
+  --endpoint http://127.0.0.1:11435 --ros-args -p use_sim_time:=true
+```
+
+程序显示路线和坐标，核对后输入 `y` 才执行。表达不需要固定句式，但能力有边界：
+最多 10 个顺序目标、统一停留 0～60 秒、整条路线循环 1～3 次。
+未知地点或含糊指代应澄清，观察和抓取等非纯导航需求应拒绝。
+模型只选择名称，坐标从文件读取；格式校验不能保证理解正确，人工确认不能跳过。
+
+### 识别当前画面
+
+先启动仿真和模型服务，无需建图或 AMCL 定位，也不必提前保存图片：
+
+```bash
+ros2 run wheel_arm_navigation scene_describe --question "画面里有哪些家具？" \
+  --endpoint http://127.0.0.1:11435 --timeout 600
+```
+
+连接相机并获得有效时钟后，冻结请求时间之后的第一帧新鲜 RGB，仅推理一次。
+不是持续视频识别，也不能精确回取按下 Enter 的历史帧。
+图片保存到 `observations/<观测ID>/rgb.png`，结果位于该目录的 `descriptions/`。
+推理失败仍保留图片，支持[离线重试](docs/reference.md#相机观测与离线重放)。
+
+### 到指定地点后观察
+
+前提是固定地图导航、定位、目标点和单独的相机问答均已可用。
+记录目标点时要选好朝向，到达后不会自动转动寻找物体。
+
+```bash
+# 预览不会导航、拍照或调用视觉模型
+ros2 run wheel_arm_navigation language_observe "去厨房看看有没有椅子" \
+  --endpoint http://127.0.0.1:11435 --preview
+
+# 核对后执行，仍需输入 y 确认
+ros2 run wheel_arm_navigation language_observe "去厨房看看有没有椅子" \
+  --endpoint http://127.0.0.1:11435
+```
+
+```text
+解析与确认 → Nav2 接受目标 → 导航移动 → 停稳检查 → 拍摄新帧 → 视觉问答
+                            └─ 后台加载视觉模型 ──────────────────┘
+```
+
+CUDA 服务一次只常驻一个模型，利用导航时间加载视觉模型；提前到达时需等待剩余加载。
+预加载失败不取消导航，到达后尝试正常按需推理；可加 `--no-vision-preload` 关闭优化。
+Ollama 保持原有流程，不使用此预加载扩展。
+
+只有导航成功、连续低速里程计有效、拍摄时刻位姿接近目标且相机 TF 可用，才继续观察。
+导航失败、取消、终态未知或采集检查失败时，不把当前位置图片当成目标地点画面。
+参数、原始里程计模式及失败状态见[观察任务参数](docs/reference.md#导航观察参数)。
+
+当前只支持**一个地点、一次单帧观察**，不支持多房间观察、条件分支、自主搜索或抓取。
+“没看到椅子”不等于“厨房没有椅子”，任务完成也不等于识别结果已被独立验证。
+
+## 观测数据与评测
+
+### 保存 RGB-D 观测
+
+`scene_snapshot` 保存同步 RGB、深度、内参和拍摄时刻 TF，不调用模型或移动机器人。
+默认需要有效的地图定位；没有 `map` 时显式选择 `odom`：
+
+```bash
+ros2 run wheel_arm_navigation scene_snapshot --label "厨房观测" \
+  --ros-args -p use_sim_time:=true
+
+# 仅基础仿真、还没有地图定位时使用
+ros2 run wheel_arm_navigation scene_snapshot --reference-frame odom \
   --ros-args -p use_sim_time:=true
 ```
 
-程序显示解析状态、路线、坐标、统一停留时间和循环次数。
-请逐项核对，输入 `y` 并回车才发送导航；直接回车或输入其他内容取消。
-非交互终端不能执行，只能使用 `--preview`。`Ctrl+C` 中断解析或取消当前导航。
+同步采集和单帧问答是不同入口。模型目前只读取 RGB，不使用深度或 TF 推断物体坐标。
+相机话题、文件结构和深度含义见[相机参考](docs/reference.md#相机观测与离线重放)。
 
-| 参数 | 默认值 | 含义 |
-| --- | --- | --- |
-| `--file` | `maps/semantic_goals.yaml` | 当前地图的目标点文件 |
-| `--model` | `qwen3:4b` | 已下载的本地模型 |
-| `--endpoint` | `http://127.0.0.1:11434` | 本机 Ollama HTTP 地址，禁止远程地址和重定向 |
-| `--llm-timeout` | `180` | 模型请求超时秒数，上限 600 |
-| `--preview` | 关闭 | 只显示解析结果，不执行 |
-| `--log-dir` | `mission_logs` | 执行日志目录 |
+### 评测语言解析
 
-当前支持最多 10 个顺序目标、每个目标统一停留 0 至 60 秒、整条路线循环 1 至 3 次。
-默认停留 0 秒、循环 1 次，导航失败后停止；等待服务和单目标超时沿用 10/180 秒。
-未知地点或含糊指代应返回 `clarify`；抓取、视觉观察、无限循环、超限数值和
-不同地点不同停留时间等应返回 `unsupported`，不执行其中的部分要求。
-不会自动将“厨房入口”等名称映射为“厨房”。
-
-接口使用 Ollama 的 JSON Schema 输出，并在本地再次严格校验字段、目标和数值。
-**格式校验不能保证模型理解正确**，因此仍必须人工核对并确认，不应无人值守执行。
-模型输出不能改变坐标、速度、失败策略或调用任意工具。
-解析请求关闭思考和流式输出，绕过环境代理访问本机服务，并请求推理后卸载模型。
-确认执行后的 JSON 日志还包含原始指令、模型名称、解析结果和耗时，注意其中可能含个人信息。
-
-## LLM 指令评测
-
-`llm_eval` 只调用与自然语言导航相同的解析器，不初始化 ROS 节点、不发送导航目标，
-无需启动 Gazebo、RViz 或 Nav2，也不读取本地地图和实际目标点坐标。
-默认评测集位于 [llm_eval.yaml](wheel_arm_navigation/config/llm_eval.yaml)，
-包含 24 条中文指令和固定目标名称，覆盖基本导航、顺序与重复目标、停留与循环参数、
-未知地点与指代、未支持动作、超限参数和绕过限制的指令。
-
-更新后在工作空间根目录编译并运行，确保 Ollama 服务和模型可用：
+`llm_eval` 不启动导航、不读取实际地图坐标，可在没有仿真时运行：
 
 ```bash
-colcon build --symlink-install --packages-select wheel_arm_navigation
-source install/setup.bash
-ros2 run wheel_arm_navigation llm_eval --model qwen3:4b
+ros2 run wheel_arm_navigation llm_eval --endpoint http://127.0.0.1:11435
 ```
 
-终端逐条输出 `passed`（匹配预期）、`mismatched`（格式合法但内容不匹配）或
-`error`（请求失败或解析/校验失败）。默认报告保存在
-`evaluation_logs/<UTC时间>-<唯一ID>.json`，运行数据不随源码提交。
+默认使用 [24 条中文回归用例](wheel_arm_navigation/config/llm_eval.yaml)，
+统计任务匹配、格式合法率、误接受率、分类结果及耗时。
+这是解析器回归测试，不是独立泛化测试或 VLN 成功率评测；比较时应保持模型、
+测试集、解析器及冷/热加载条件一致。更多选项见[评测参考](docs/reference.md#语言解析评测)。
 
-评分严格比较 `status`、目标列表的顺序及重复次数、`stay` 和 `repeat`，
-不比较 `message` 的措辞。结果分开统计：
+### 数据保存位置
 
-- 任务解析正确率：完全匹配预期的次数 / 已完成尝试次数，错误也计入分母。
-- 格式合法率：成功通过解析器校验的次数 / 已完成尝试次数，通信失败也计入分母。
-- 误接受率：预期为 `clarify` 或 `unsupported` 却返回合法 `ready` 的次数 / 已完成的预期拒绝次数。
-- 分类别正确率、状态混淆统计，以及含请求失败在内的耗时均值、中位数和 P95。
+以下目录均相对于执行 ROS 命令的工作空间根目录，默认不提交到 Git：
 
-报告保存每次指令、预期与实际结果、不一致字段、错误原因、任务配置和耗时，
-还保存完整测试集、测试集 SHA-256、解析器文件 SHA-256、模型标签和重复轮数。
-这些信息便于对照结果，但模型标签可能变化，并不等于锁定了模型权重版本。
-比较时应使用相同测试集、解析器、模型版本和运行环境；耗时包含模型加载，
-当前解析器每次请求后卸载模型，不能当作纯 token 生成速度。
+| 目录 | 内容 |
+| --- | --- |
+| `maps/` | 地图 YAML/PGM、命名目标点、启动位姿先验 |
+| `mission_logs/` | 执行日志、目标快照、预加载状态和失败阶段 |
+| `observations/` | RGB 或 RGB-D 观测、时间元数据、视觉报告 |
+| `evaluation_logs/` | LLM 解析回归评测报告 |
 
-可重复运行整套评测，或只运行某些类别；评测重复轮数与导航任务的循环次数不同：
+日志可能包含原始指令、图片和位置，公开数据前请自行检查。
 
-```bash
-ros2 run wheel_arm_navigation llm_eval --repeat 3
-ros2 run wheel_arm_navigation llm_eval --category clarify --category unsupported
+## 项目结构与配置
+
+```text
+wheelarm-lab/
+├── wheel_arm_description/  # xacro/URDF、传感器、Gazebo 插件
+├── wheel_arm_control/      # 底盘和机械臂 ros2_control 配置
+├── wheel_arm_gazebo/       # 场景、launch、EKF、SLAM/Nav2、RViz
+├── wheel_arm_teleop/       # Tk 键盘遥控
+├── wheel_arm_navigation/   # 命名目标、任务执行、语言解析与视觉观察
+├── model_service/          # 独立 Python CUDA 服务，不参与 colcon 构建
+├── docs/                   # 参数、数据格式、排错与测试参考
+└── CHANGELOG.md            # 功能和配置变更历史
 ```
 
-| 参数 | 默认值 | 含义 |
-| --- | --- | --- |
-| `--suite` | 随包安装的 `llm_eval.yaml` | 自定义评测 YAML |
-| `--model` / `--endpoint` | 同自然语言导航 | 模型与本机接口地址 |
-| `--llm-timeout` | `180` | 单次请求超时秒数 |
-| `--repeat` | `1` | 整套评测轮数，范围 1 至 10 |
-| `--category` | 全部 | 筛选类别，可重复指定，未知类别会报错 |
-| `--output` | 自动生成唯一报告路径 | 自定义 JSON 路径，不允许覆盖已有文件 |
+| 想调整的内容 | 位置 |
+| --- | --- |
+| 尺寸、惯量、轮子接触与传感器 | [wheel_arm.urdf.xacro](wheel_arm_description/urdf/wheel_arm.urdf.xacro) |
+| 底盘和机械臂控制器 | [controllers.yaml](wheel_arm_control/config/controllers.yaml) |
+| EKF 融合 | [ekf.yaml](wheel_arm_gazebo/config/ekf.yaml) |
+| SLAM、AMCL、Nav2 | [nav2_params.yaml](wheel_arm_gazebo/config/nav2_params.yaml) |
+| 无 EKF 时的对应配置 | [controllers_raw_odom.yaml](wheel_arm_control/config/controllers_raw_odom.yaml)、[nav2_params_raw_odom.yaml](wheel_arm_gazebo/config/nav2_params_raw_odom.yaml) |
+| 定位先验示例 | [initial_pose.example.yaml](wheel_arm_gazebo/config/initial_pose.example.yaml) |
+| 顺序任务示例 | [patrol.example.yaml](wheel_arm_navigation/config/patrol.example.yaml) |
 
-自定义测试集保留 `version: 1`、`names` 和 `cases`。每条用例包含唯一 `id`、
-`category`、`instruction` 和 `expected`；预期包含上述四个评分字段，不含 `message`。
-所有用例在调用模型前检查，避免测试数据配置错误被当成模型错误。
-每条完成后原子更新报告，`Ctrl+C` 保留已完成结果并标记未完成数量；正确率只描述
-已完成部分，不能将中断评测视为整套通过。退出码为全部通过 `0`、有不一致/错误 `1`、中断 `130`。
+场景、出生位置、里程计模式和手动控制命令见[参数与操作参考](docs/reference.md)。
+更新后重新运行 `rosdep install`、`colcon build --symlink-install` 并加载工作空间；
+模型、传感器、控制器或 launch 配置改变后，应关闭旧进程并重新启动相应组件。
 
-这是小规模人工标注的**回归测试集**，部分样例与提示词示例相似，不是独立泛化测试集，
-也不是 VLN 导航成功率评测。不要只为提高这 24 条的分数修改提示词；持续添加真实误解析案例，
-并将后续独立测试集与提示词开发样例分开。格式合法或评测通过都不替代执行前人工确认。
+## 测试与限制
 
-2026-10-11 本机 `qwen3:4b` 单轮基线：21/24 条正确（87.5%），格式合法率 100%，
-15 条预期拒绝中误接受 1 条，平均耗时约 5.15 秒。失败涉及否定表达、小数停留和
-不同地点不同停留时间；最后一项被误简化成统一停留时间，执行前必须仔细核对。
-该成绩只对应当次回归测试，不代表模型泛化能力；本次未为提高分数调整提示词。
-
-## 测试
-
-运行导航任务与键盘输入单元测试（工作空间根目录，默认不启动 DDS 或窗口）：
+ROS 包测试在工作空间根目录执行：
 
 ```bash
-colcon test --packages-select wheel_arm_navigation wheel_arm_teleop \
+colcon test --packages-select wheel_arm_gazebo wheel_arm_navigation wheel_arm_teleop \
   --event-handlers console_direct+
 colcon test-result --verbose
 ```
 
-ROS 接口集成测试使用模拟 action 服务和 TF，不验证真实路径可达性。
-需要单独启用，并选择未使用的 ROS 域以免连接正在运行的机器人：
+默认跳过需要 DDS 或窗口的可选测试。隔离 ROS、键盘窗口及模型测试见
+[测试参考](docs/reference.md#运行测试)和[模型服务文档](model_service/README.md#测试)。
 
-```bash
-ROS_DOMAIN_ID=87 WHEELARM_ROS_TEST=1 python3 -m pytest \
-  src/wheelarm-lab/wheel_arm_navigation/test -q
-```
+- 仿真定位可能漂移，轮子打滑、碰撞和时间同步都可能影响激光与地图对齐。
+- 在线 SLAM 可通过回环修正地图，固定地图 AMCL 模式不会修改保存地图。
+- 相机安装较低、视野有限；理想仿真深度不等于真实相机噪声模型。
+- 模型会误解析、遗漏或产生幻觉，格式校验不能替代真实效果评估。
+- 模型与 Gazebo 共享资源，完整仿真并行性能需在使用者硬件上验证。
+- 没有跨进程底盘控制权仲裁，不适合未经验证直接迁移到实机或无人值守运行。
 
-键盘 ROS 与真实窗口测试另行启用；会短暂打开窗口并注入测试按键，
-仅向隔离 ROS 域发布速度消息，不控制正在运行的仿真：
+## 后续方向
 
-```bash
-ROS_DOMAIN_ID=88 WHEELARM_ROS_TEST=1 WHEELARM_GUI_TEST=1 python3 -m pytest \
-  src/wheelarm-lab/wheel_arm_teleop/test -q
-```
+- 物体检测与基于深度的空间定位。
+- 任务级移动操作与机械臂规划。
+- VLN 场景、语义标注、数据采集与评测接口。
+- VLA 策略接入。
 
-上述 ROS 域必须未被其他机器人使用。窗口测试需要本地桌面显示环境。
+## 贡献与许可证
 
-## 当前状态与路线图
+欢迎提交 Issue 和 Pull Request。请附上环境、启动命令、复现步骤及验证结果；
+功能或配置变化同步记录到 [CHANGELOG.md](CHANGELOG.md)，使用方式变化更新相关文档。
 
-- [x] 轮臂机器人模型与 Gazebo Fortress 仿真
-- [x] 底盘、机械臂与键盘遥控
-- [x] 2D LiDAR、IMU、RGB 相机
-- [x] EKF 状态估计、2D SLAM、Nav2
-- [x] 地图加载与 AMCL 定位模式
-- [x] 命名语义目标点与 Nav2 action 接口
-- [x] 多目标顺序导航与任务执行日志
-- [x] 本地 LLM 自然语言任务解析、预览与执行确认
-- [x] LLM 指令回归评测与分类结果报告
-- [ ] 深度相机与 3D 感知
-- [ ] 任务级移动操作
-- [ ] VLN 场景、数据采集和评测接口
-- [ ] VLA 策略接入
+维护者：`renyimen` · 邮箱：`renyimen2026@foxmail.com`。
 
-## 已知限制
-
-这是一个持续迭代的仿真研究平台。在线建图时，旋转期间的实时 LaserScan 与全局栅格地图
-可能短暂不重合；扫描匹配和回环优化可能进一步修正位姿与地图。
-固定地图模式由 AMCL 估计位姿，不会通过回环修改已保存地图。持续的扫描错位需要检查定位，
-不能仅靠提高地图刷新频率解决。
-
-## 贡献
-
-维护者：`renyimen`，联系邮箱：`renyimen2026@foxmail.com`。
-
-欢迎提交 Issue、功能建议和 Pull Request。涉及机器人模型、控制器或导航参数的修改，请同时说明测试环境、启动命令和验证结果。
-
-提交功能或配置改动时，请同步更新 [CHANGELOG.md](CHANGELOG.md) 的“未发布”章节；
-涉及使用方式变化时，也请更新本 README。
-
-## 许可证
-
-本项目采用 [Apache License 2.0](LICENSE) 开源。
-
-第三方住宅模型与贴图遵循 [AWS 原始许可证](wheel_arm_gazebo/models/AWS_LICENSE)。
+项目代码采用 [Apache License 2.0](LICENSE)。第三方住宅模型与贴图遵循
+[AWS 原始许可证](wheel_arm_gazebo/models/AWS_LICENSE)。

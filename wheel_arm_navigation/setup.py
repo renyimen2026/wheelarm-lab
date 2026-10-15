@@ -23,6 +23,9 @@ setup(
         "semantic_goal = wheel_arm_navigation.semantic_goal:main",
         "mission_runner = wheel_arm_navigation.mission_runner:main",
         "language_goal = wheel_arm_navigation.language_goal:main",
+        "language_observe = wheel_arm_navigation.language_observe:main",
         "llm_eval = wheel_arm_navigation.llm_eval:main",
+        "scene_snapshot = wheel_arm_navigation.scene_snapshot:main",
+        "scene_describe = wheel_arm_navigation.scene_describe:main",
     ]},
 )
