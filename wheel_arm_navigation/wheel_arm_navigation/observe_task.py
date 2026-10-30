@@ -11,7 +11,7 @@ from wheel_arm_navigation import vision
 
 
 def execute(task, document, goals_file, options, navigate, capture, infer,
-            preflight, stopping, progress, source, preload_snapshot=None):
+            preflight, stopping, progress, source, preload_snapshot=None, on_stage=None):
     if (not isinstance(task, dict) or set(task) != {"goal", "question"}
             or not isinstance(task["goal"], str) or not isinstance(task["question"], str)
             or not task["question"].strip() or len(task["question"]) > 500):
@@ -44,6 +44,8 @@ def execute(task, document, goals_file, options, navigate, capture, infer,
         step.update(status="running", started_at=utc_now())
         journal.flush()
         started = time.monotonic()
+        if on_stage is not None:
+            on_stage("navigation_requested", {"goal": task["goal"]})
         result = navigate(step["name"], step["pose"], document["frame_id"],
                           plan["wait"], plan["timeout"])
         step.update(status=result.status, reason=result.reason, action_status=result.action_status,
@@ -64,6 +66,8 @@ def execute(task, document, goals_file, options, navigate, capture, infer,
             observation["status"] = "capturing"
             journal.flush()
             progress("导航成功，等待里程计停稳并检查拍摄时刻定位")
+            if on_stage is not None:
+                on_stage("arrived", {"goal": task["goal"]})
             image, metadata = capture(step["pose"], document["frame_id"])
             if stopping():
                 raise KeyboardInterrupt()
@@ -89,6 +93,9 @@ def execute(task, document, goals_file, options, navigate, capture, infer,
             report_path = save_report(directory / "descriptions", report)
             observation.update(status="completed", report=str(report_path), result=result, elapsed_sec=elapsed)
             status, code = "completed", 0
+            if on_stage is not None:
+                on_stage("completed", {"goal": task["goal"], "result": result,
+                                        "report": str(report_path)})
             progress("当前画面观察结果：" + result["summary"])
             progress("注意：单帧没看到某物，不代表目标地点不存在该物体。")
     except KeyboardInterrupt:
@@ -106,4 +113,7 @@ def execute(task, document, goals_file, options, navigate, capture, infer,
         journal.data.update(status=status, finished_at=utc_now(), final_phase=phase)
         journal.flush()
     progress(f"任务结束：{status}；日志：{journal.path}")
+    if on_stage is not None:
+        on_stage("finished", {"status": status, "phase": phase, "log": str(journal.path),
+                              "reason": observation["reason"]})
     return code, journal.path

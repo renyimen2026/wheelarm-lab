@@ -64,6 +64,7 @@ class ObserveClient(GoalClient):
         self.options = options
         self.phase = "navigation"
         self.vision_preload = None
+        self.on_stage = None
         self.motion_after_ns = 0
         self.motion = Stillness(duration=options.settle_duration)
         self.buffer = Buffer()
@@ -72,6 +73,8 @@ class ObserveClient(GoalClient):
                                                  qos_profile_sensor_data)
 
     def on_goal_accepted(self, name):
+        if self.on_stage is not None:
+            self.on_stage("navigating", {"goal": name})
         if self.vision_preload is not None:
             self.vision_preload.start()
 

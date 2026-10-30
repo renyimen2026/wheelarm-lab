@@ -5,7 +5,7 @@ Panels:
     Property Tree Widget:
       Expanded: ~
       Splitter Ratio: 0.5
-    Tree Height: 287
+    Tree Height: 171
   - Class: rviz_common/Selection
     Name: Selection
   - Class: rviz_common/Tool Properties
@@ -55,6 +55,8 @@ Visualization Manager:
           Value: true
         camera_link:
           Value: true
+        camera_optical_frame:
+          Value: true
         forearm_link:
           Value: true
         imu_link:
@@ -97,7 +99,8 @@ Visualization Manager:
                           tool0:
                             {}
                 camera_link:
-                  {}
+                  camera_optical_frame:
+                    {}
                 imu_link:
                   {}
                 left_wheel_link:
@@ -147,6 +150,10 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
+        camera_optical_frame:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
         forearm_link:
           Alpha: 1
           Show Axes: false
@@ -436,6 +443,20 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /wheel_arm/diff_drive_base_controller/odom
       Value: false
+    - Class: rviz_default_plugins/Image
+      Enabled: false
+      Max Value: 1
+      Median window: 5
+      Min Value: 0
+      Name: Image
+      Normalize Range: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /camera/image
+      Value: false
   Enabled: true
   Global Options:
     Background Color: 36; 38; 42
@@ -482,41 +503,43 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 19.094884872436523
+      Distance: 16.561527252197266
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -0.0009746318683028221
-        Y: -0.6637750864028931
-        Z: 0.3445892333984375
+        X: -1.0314915180206299
+        Y: -4.9669294357299805
+        Z: 0.343544065952301
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.544796347618103
+      Pitch: 1.5697963237762451
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 2.739997386932373
+      Yaw: 3.1449999809265137
     Saved: ~
 Window Geometry:
   Displays:
     collapsed: false
-  Height: 976
+  Height: 803
   Hide Left Dock: false
   Hide Right Dock: true
+  Image:
+    collapsed: false
   Navigation 2:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd0000000200000000000001cb00000376fc0200000004fb000000100044006900730070006c006100790073010000003d0000015c000000c900fffffffb0000001e0054006f006f006c002000500072006f0070006500720074006900650073010000019f000000d50000005c00fffffffb0000001200530065006c0065006300740069006f006e000000010c0000005c0000005c00fffffffb00000018004e0061007600690067006100740069006f006e00200032010000027a000001390000013900ffffff00000001000001cb00000376fc0200000001fb0000000a00560069006500770073000000003d00000376000000a400ffffff000003a70000037600000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd0000000200000000000001cb000002c9fc0200000005fb000000100044006900730070006c006100790073010000003d000000e8000000c900fffffffb0000001e0054006f006f006c002000500072006f0070006500720074006900650073010000012b000000690000005c00fffffffb0000001200530065006c0065006300740069006f006e000000010c0000005c0000005c00fffffffb00000018004e0061007600690067006100740069006f006e00200032010000019a0000016c0000012600fffffffb0000000a0049006d006100670065020000046d0000037a0000017d0000012f00000001000001cb00000376fc0200000001fb0000000a00560069006500770073000000003d00000376000000a400ffffff000003f7000002c900000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Tool Properties:
     collapsed: false
   Views:
     collapsed: true
-  Width: 1400
+  Width: 1480
   X: 70
-  Y: 587
+  Y: 760

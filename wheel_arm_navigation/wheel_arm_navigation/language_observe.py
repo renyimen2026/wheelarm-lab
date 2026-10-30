@@ -10,9 +10,10 @@ from wheel_arm_navigation import observe_llm, vision
 from wheel_arm_navigation.scene_snapshot import positive
 
 
-def parser():
+def parser(include_instruction=True):
     result = argparse.ArgumentParser(description="到一个已记录地点，停稳后拍照回答；执行前确认")
-    result.add_argument("instruction")
+    if include_instruction:
+        result.add_argument("instruction")
     result.add_argument("--file", default="maps/semantic_goals.yaml")
     result.add_argument("--model", default="qwen3:4b")
     result.add_argument("--vision-model", default="qwen3-vl:4b-instruct")
@@ -34,7 +35,7 @@ def parser():
     return result
 
 
-def run_execution(task, document, options, argv, source):
+def run_execution(task, document, options, argv, source, on_stage=None):
     import rclpy
     from rclpy.signals import SignalHandlerOptions
     from wheel_arm_navigation.arrival_capture import ObserveClient
@@ -46,6 +47,7 @@ def run_execution(task, document, options, argv, source):
         rclpy.init(args=[argv[0], "--ros-args", "-p", "use_sim_time:=true", "--", *argv[1:]],
                    signal_handler_options=SignalHandlerOptions.NO)
         node = ObserveClient(options)
+        node.on_stage = on_stage
         preload = VisionPreload(options.vision_model, options.endpoint, min(options.vision_timeout, 120),
                                 node.get_logger().info, lambda: node.stopping)
         node.vision_preload = preload
@@ -66,6 +68,8 @@ def run_execution(task, document, options, argv, source):
             remaining = options.vision_timeout - (time.monotonic() - started)
             if remaining <= 0:
                 raise RuntimeError("等待预加载耗尽视觉推理时间预算；已保留拍摄图片")
+            if on_stage is not None:
+                on_stage("recognizing", {"goal": task["goal"], "question": question})
             return vision.describe(image, question, options.vision_model, options.endpoint, remaining)
 
         def preflight():
@@ -79,7 +83,8 @@ def run_execution(task, document, options, argv, source):
 
         code, _ = execute(task, document, options.file, options, node.navigate_pose,
                           node.capture_at_goal, infer, preflight, lambda: node.stopping,
-                          node.get_logger().info, source, preload_snapshot=preload.snapshot)
+                          node.get_logger().info, source, preload_snapshot=preload.snapshot,
+                          on_stage=on_stage)
         return code
     finally:
         if preload is not None:
@@ -92,18 +97,22 @@ def run_execution(task, document, options, argv, source):
             rclpy.shutdown()
 
 
-def run(options, argv):
+def run(options, argv, on_stage=None, session_id=None):
     if not 0 < options.vision_timeout <= 600:
         raise ValueError("视觉超时必须在 0 至 600 秒之间")
     if options.settle_duration >= options.capture_wait:
         raise ValueError("停稳时长必须小于采集等待超时")
     document = load(options.file)
+    if on_stage is not None:
+        on_stage("parsing", {"instruction": options.instruction})
     response, task, elapsed = observe_llm.parse_instruction(
         options.instruction, document, options.model, options.endpoint, options.llm_timeout)
     print(f"解析状态：{response['status']}；耗时：{elapsed:g} 秒；{response['message']}")
     if task is None:
         print("未启动导航，请明确地点和观察问题。")
         return 1
+    if on_stage is not None:
+        on_stage("parsed", {**task, "elapsed_sec": elapsed})
     print(json.dumps(task, ensure_ascii=False, indent=2))
     print("目标位姿：" + json.dumps(document["goals"][task["goal"]], ensure_ascii=False))
     if options.preview:
@@ -118,6 +127,10 @@ def run(options, argv):
     source = {"kind": "local_llm_observe", "instruction": options.instruction,
               "model": options.model, "vision_model": options.vision_model, "endpoint": options.endpoint,
               "parse_sec": elapsed, "response": response, "confirmed": True}
+    if session_id is not None:
+        source.update(interaction="terminal_chat", session_id=session_id)
+    if on_stage is not None:
+        return run_execution(task, document, options, argv, source, on_stage=on_stage)
     return run_execution(task, document, options, argv, source)
 
 

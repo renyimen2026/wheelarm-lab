@@ -159,6 +159,25 @@ ros2 run wheel_arm_navigation mission_runner \
 二者均要求精确名称、只使用本机模型，并在执行前人工确认。
 支持自然语言表达，不是固定句式匹配；模型仍可能误解否定或附加条件。
 
+`robot_chat` 是 `language_observe` 的持续终端入口，不接收位置参数任务；
+启动后在 `你：` 提示符输入，每条任务均需人工确认，不保存跨轮对话记忆。
+两者共用下表参数，但 `robot_chat` 的 `--endpoint` 默认是
+`http://127.0.0.1:11435`，原单次入口仍默认 Ollama `11434`。
+`--preview` 在交互入口同样可用，此时每条输入只解析，不发送导航或拍摄。
+
+```bash
+ros2 run wheel_arm_navigation robot_chat --file maps/semantic_goals.yaml
+
+# 关闭 EKF 时，停稳检查也需改为原始里程计
+ros2 run wheel_arm_navigation robot_chat \
+  --odom-topic /wheel_arm/diff_drive_base_controller/odom
+```
+
+窗口内 `/help` 查看帮助，`/quit` 或 `/exit` 退出；空闲时 `Ctrl+C` 退出，
+执行时 `Ctrl+C` 请求取消。普通失败或已确认取消后返回输入；导航终态未知时
+终止会话，不继续接收任务。日志 `source` 记录 `interaction=terminal_chat` 和
+`session_id`，同一窗口的多次执行可按会话关联，图片仍按每次观测分别保存。
+
 | `language_observe` 参数 | 默认值 | 作用 |
 | --- | --- | --- |
 | `--file` | `maps/semantic_goals.yaml` | 目标点文件 |
