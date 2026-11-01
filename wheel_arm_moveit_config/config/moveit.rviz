@@ -1,0 +1,74 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Grid
+      Value: true
+      Cell Size: 0.25
+    - Class: moveit_rviz_plugin/MotionPlanning
+      Name: MotionPlanning
+      Value: true
+      Enabled: true
+      Robot Description: robot_description
+      Planning Scene Topic: /monitored_planning_scene
+      Planning Request:
+        Planning Group: arm
+        Interactive Marker Size: 0.15
+      Planned Path:
+        Loop Animation: false
+        State Display Time: 0.05 s
+        Trajectory Topic: /display_planned_path
+      Scene Geometry:
+        Scene Alpha: 1
+      Scene Robot:
+        Robot Alpha: 0.7
+    - Class: rviz_default_plugins/MarkerArray
+      Name: RGBD Cup
+      Enabled: true
+      Value: true
+      Topic:
+        Value: /cup_grasp/markers
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Depth: 1
+    - Class: rviz_default_plugins/Image
+      Name: Depth Image
+      Enabled: true
+      Value: true
+      Topic:
+        Value: /camera/depth_image
+        Depth: 2
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+      Transport Hint: raw
+      Normalize Range: false
+      Min Value: 0.1
+      Max Value: 3.0
+  Global Options:
+    Fixed Frame: base_footprint
+    Background Color: 40; 42; 44
+    Frame Rate: 30
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 2.2
+      Focal Point:
+        X: 0.25
+        Y: 0
+        Z: 0.5
+      Pitch: 0.4
+      Yaw: 0.8
+      Target Frame: base_footprint
+Window Geometry:
+  Width: 1600
+  Height: 900
+  QMainWindow State: 000000ff00000000fd00000002000000000000028a00000384fc0200000001fc00000000000003840000003801000020fa000000000200000003fb000000100044006900730070006c0061007900730100000000ffffffff0000001700fffffffb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e00670100000000ffffffff0000001700fffffffb0000000a005600690065007700730100000000ffffffff0000001700ffffff000000010000015e00000384fc0200000001fb000000160044006500700074006800200049006d0061006700650100000000000003840000001700ffffff0000024c0000038400000004000000040000000800000008fc00000000

@@ -1,0 +1,7 @@
+moveit_setup_assistant_config:
+  urdf:
+    package: wheel_arm_description
+    relative_path: urdf/wheel_arm.urdf.xacro
+    xacro_args: use_gazebo_control:=false
+  srdf:
+    relative_path: config/wheel_arm.srdf

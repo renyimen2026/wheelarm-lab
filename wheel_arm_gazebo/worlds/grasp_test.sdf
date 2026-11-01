@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+<sdf version="1.9">
+  <world name="grasp_test">
+    <physics name="physics" type="ignored">
+      <max_step_size>0.001</max_step_size><real_time_factor>1</real_time_factor>
+    </physics>
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+    <light name="sun" type="directional">
+      <pose>0 0 10 0 0 0</pose><cast_shadows>true</cast_shadows>
+      <diffuse>0.8 0.8 0.8 1</diffuse><specular>0.2 0.2 0.2 1</specular>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision"><geometry><plane><normal>0 0 1</normal><size>20 20</size></plane></geometry></collision>
+        <visual name="visual">
+          <geometry><plane><normal>0 0 1</normal><size>20 20</size></plane></geometry>
+          <material><ambient>0.65 0.67 0.69 1</ambient><diffuse>0.65 0.67 0.69 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <model name="cup_table">
+      <static>true</static>
+      <pose>0.70 0 0.27435 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>0.30 0.40 0.5487</size></box></geometry></collision>
+        <visual name="visual">
+          <geometry><box><size>0.30 0.40 0.5487</size></box></geometry>
+          <material><ambient>0.45 0.47 0.50 1</ambient><diffuse>0.45 0.47 0.50 1</diffuse></material>
+        </visual>
+      </link>
+    </model>
+    <include>
+      <uri>model://test_cup</uri><name>test_cup</name>
+      <pose>0.6680 0 0.5988 0 0 0</pose>
+    </include>
+  </world>
+</sdf>

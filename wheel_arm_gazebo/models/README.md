@@ -1,4 +1,6 @@
-# 住宅场景资源
+# 场景与测试模型资源
+
+## 住宅场景
 
 来源：https://github.com/aws-robotics/aws-robomaker-small-house-world
 
@@ -18,3 +20,13 @@ Apache-2.0 许可证。资源保存在本仓库，运行时可离线加载。
 
 相框 Collada 模型的图片引用路径已改为本目录下的 `photos/`，
 避免依赖上游仓库的工作空间目录结构。
+
+## 桌面抓取模型
+
+`test_cup/`、`ceramic_mug/` 和 `ceramic_cup/` 是本项目自制的简化测试杯、有柄陶瓷杯和无柄陶瓷杯，
+不是 AWS 住宅资源，采用项目根目录的 [Apache-2.0 许可证](../../LICENSE)。
+两个陶瓷模型为真实空心外形；物理碰撞用杯壁和杯底的简化几何近似，不等于真实陶瓷接触模型。
+
+生成器为 [ceramic_mug/generate_model.py](ceramic_mug/generate_model.py)，同时生成有柄/无柄资产及对应世界。
+运行会重写相关生成文件；场景资产已经随仓库提供，日常启动无需重新生成。
+使用入口及能力边界见[首页](../../README.md#双指夹爪与-rgb-d-抓取)。

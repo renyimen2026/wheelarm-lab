@@ -2,6 +2,12 @@
 <robot name="wheel_arm" xmlns:xacro="http://www.ros.org/wiki/xacro">
   <xacro:arg name="use_gazebo_control" default="true"/>
   <xacro:arg name="controllers_file" default="$(find wheel_arm_control)/config/controllers.yaml"/>
+  <xacro:arg name="initial_shoulder_lift" default="0.0"/>
+  <xacro:arg name="initial_elbow" default="0.0"/>
+  <xacro:arg name="initial_wrist_pitch" default="0.0"/>
+  <xacro:arg name="camera_mount" default="low"/>
+  <xacro:property name="camera_mount" value="$(arg camera_mount)"/>
+  <xacro:property name="raised_camera" value="${dict(low=False, mast=True)[camera_mount]}"/>
 
   <xacro:property name="base_length" value="0.62"/>
   <xacro:property name="base_width" value="0.42"/>
@@ -276,6 +282,43 @@
     <origin xyz="0.11 0 0" rpy="0 0 0"/>
   </joint>
 
+  <!-- Each prismatic joint moves outward; total inner opening is 2 * joint position. -->
+  <xacro:macro name="gripper_finger" params="side sign">
+    <link name="${side}_finger_link">
+      <visual>
+        <origin xyz="0.04 0 0"/>
+        <geometry><box size="0.08 0.012 0.04"/></geometry>
+        <material name="black"/>
+      </visual>
+      <collision>
+        <origin xyz="0.04 0 0"/>
+        <geometry><box size="0.08 0.012 0.04"/></geometry>
+      </collision>
+      <xacro:box_inertial mass="0.06" x="0.08" y="0.012" z="0.04" ox="0.04" oy="0" oz="0"/>
+    </link>
+    <joint name="${side}_finger_joint" type="prismatic">
+      <parent link="tool0"/>
+      <child link="${side}_finger_link"/>
+      <origin xyz="0.08 ${sign * 0.006} 0"/>
+      <axis xyz="0 ${sign} 0"/>
+      <limit lower="0" upper="0.04" effort="10" velocity="0.04"/>
+      <dynamics damping="2" friction="0.1"/>
+    </joint>
+    <gazebo reference="${side}_finger_link">
+      <mu1>1.5</mu1>
+      <mu2>1.5</mu2>
+    </gazebo>
+  </xacro:macro>
+  <xacro:gripper_finger side="left" sign="${1}"/>
+  <xacro:gripper_finger side="right" sign="${-1}"/>
+
+  <link name="gripper_tcp"/>
+  <joint name="gripper_tcp_joint" type="fixed">
+    <parent link="tool0"/>
+    <child link="gripper_tcp"/>
+    <origin xyz="0.12 0 0"/>
+  </joint>
+
   <link name="lidar_link">
     <visual>
       <origin xyz="0.06 0 0.025" rpy="0 0 0"/>
@@ -322,6 +365,26 @@
     <origin xyz="0 0 ${base_height + 0.03}" rpy="0 0 0"/>
   </joint>
 
+  <xacro:if value="${raised_camera}">
+    <link name="camera_mast_link">
+      <visual>
+        <origin xyz="0 0 0.315"/>
+        <geometry><box size="0.025 0.025 0.63"/></geometry>
+        <material name="dark_gray"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 0.315"/>
+        <geometry><box size="0.025 0.025 0.63"/></geometry>
+      </collision>
+      <xacro:box_inertial mass="0.35" x="0.025" y="0.025" z="0.63" ox="0" oy="0" oz="0.315"/>
+    </link>
+    <joint name="camera_mast_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="camera_mast_link"/>
+      <origin xyz="-0.18 0.19 ${base_height}"/>
+    </joint>
+  </xacro:if>
+
   <link name="camera_link">
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -340,9 +403,16 @@
   </link>
 
   <joint name="camera_joint" type="fixed">
-    <parent link="base_link"/>
+    <parent link="${'camera_mast_link' if raised_camera else 'base_link'}"/>
     <child link="camera_link"/>
-    <origin xyz="0.34 0 ${base_height - 0.04}" rpy="0 0 0"/>
+    <xacro:if value="${raised_camera}">
+      <!-- Keep the optical center above the mast top, not on its face.
+           Coincident geometry causes invalid RGB-D renders in Fortress/Ogre2. -->
+      <origin xyz="0 0 0.6575" rpy="0 0.35 -0.22"/>
+    </xacro:if>
+    <xacro:unless value="${raised_camera}">
+      <origin xyz="0.34 0 ${base_height - 0.04}" rpy="0 0 0"/>
+    </xacro:unless>
   </joint>
 
   <!-- Optical coordinates: x right, y down, z forward. -->
@@ -455,24 +525,36 @@
     <joint name="shoulder_lift_joint">
       <command_interface name="position"/>
       <state_interface name="position">
-        <param name="initial_value">0.0</param>
+        <param name="initial_value">$(arg initial_shoulder_lift)</param>
       </state_interface>
       <state_interface name="velocity"/>
     </joint>
     <joint name="elbow_joint">
       <command_interface name="position"/>
       <state_interface name="position">
-        <param name="initial_value">0.0</param>
+        <param name="initial_value">$(arg initial_elbow)</param>
       </state_interface>
       <state_interface name="velocity"/>
     </joint>
     <joint name="wrist_pitch_joint">
       <command_interface name="position"/>
       <state_interface name="position">
-        <param name="initial_value">0.0</param>
+        <param name="initial_value">$(arg initial_wrist_pitch)</param>
       </state_interface>
       <state_interface name="velocity"/>
     </joint>
+    <xacro:macro name="gripper_control_joint" params="side">
+      <joint name="${side}_finger_joint">
+        <command_interface name="position">
+          <param name="min">0.0</param>
+          <param name="max">0.04</param>
+        </command_interface>
+        <state_interface name="position"><param name="initial_value">0.03</param></state_interface>
+        <state_interface name="velocity"/>
+      </joint>
+    </xacro:macro>
+    <xacro:gripper_control_joint side="left"/>
+    <xacro:gripper_control_joint side="right"/>
   </ros2_control>
 
   <xacro:if value="$(arg use_gazebo_control)">

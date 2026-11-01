@@ -1,0 +1,74 @@
+<?xml version="1.0"?>
+<robot name="wheel_arm">
+  <!-- The base is stationary during arm planning; there is no mobile-base group. -->
+  <group name="arm">
+    <chain base_link="base_link" tip_link="tool0"/>
+  </group>
+  <group_state name="home" group="arm">
+    <joint name="shoulder_pan_joint" value="0"/>
+    <joint name="shoulder_lift_joint" value="0"/>
+    <joint name="elbow_joint" value="0"/>
+    <joint name="wrist_pitch_joint" value="0"/>
+  </group_state>
+  <group name="gripper">
+    <joint name="left_finger_joint"/>
+    <joint name="right_finger_joint"/>
+  </group>
+  <!-- Fixed fixture poses for grasp_test.sdf, not general-purpose grasp solutions. -->
+  <group_state name="cup_pregrasp" group="arm">
+    <joint name="shoulder_pan_joint" value="0"/>
+    <joint name="shoulder_lift_joint" value="-1.05"/>
+    <joint name="elbow_joint" value="2.1"/>
+    <joint name="wrist_pitch_joint" value="-1.05"/>
+  </group_state>
+  <group_state name="cup_grasp" group="arm">
+    <joint name="shoulder_pan_joint" value="0"/>
+    <joint name="shoulder_lift_joint" value="-0.8"/>
+    <joint name="elbow_joint" value="1.6"/>
+    <joint name="wrist_pitch_joint" value="-0.8"/>
+  </group_state>
+  <group_state name="cup_lift" group="arm">
+    <joint name="shoulder_pan_joint" value="0"/>
+    <joint name="shoulder_lift_joint" value="-1.0"/>
+    <joint name="elbow_joint" value="1.6"/>
+    <joint name="wrist_pitch_joint" value="-0.6"/>
+  </group_state>
+  <end_effector name="parallel_gripper" parent_link="tool0" group="gripper" parent_group="arm"/>
+  <group_state name="open" group="gripper">
+    <joint name="left_finger_joint" value="0.04"/>
+    <joint name="right_finger_joint" value="0.04"/>
+  </group_state>
+  <group_state name="closed" group="gripper">
+    <joint name="left_finger_joint" value="0"/>
+    <joint name="right_finger_joint" value="0"/>
+  </group_state>
+  <group_state name="ready" group="arm">
+    <joint name="shoulder_pan_joint" value="0"/>
+    <joint name="shoulder_lift_joint" value="-0.6"/>
+    <joint name="elbow_joint" value="0.9"/>
+    <joint name="wrist_pitch_joint" value="-0.3"/>
+  </group_state>
+  <passive_joint name="left_wheel_joint"/>
+  <passive_joint name="right_wheel_joint"/>
+
+  <!-- Only connected neighbors and the overlapping rigid IMU/mount are exempt. -->
+  <disable_collisions link1="base_footprint" link2="base_link" reason="Adjacent"/>
+  <disable_collisions link1="base_link" link2="left_wheel_link" reason="Adjacent"/>
+  <disable_collisions link1="base_link" link2="right_wheel_link" reason="Adjacent"/>
+  <disable_collisions link1="base_link" link2="rear_caster_link" reason="Adjacent"/>
+  <disable_collisions link1="base_link" link2="arm_mount_link" reason="Adjacent"/>
+  <disable_collisions link1="base_link" link2="lidar_link" reason="Adjacent"/>
+  <disable_collisions link1="base_link" link2="imu_link" reason="Adjacent"/>
+  <disable_collisions link1="base_link" link2="camera_link" reason="Adjacent"/>
+  <disable_collisions link1="camera_link" link2="camera_optical_frame" reason="Adjacent"/>
+  <disable_collisions link1="arm_mount_link" link2="shoulder_link" reason="Adjacent"/>
+  <disable_collisions link1="shoulder_link" link2="upper_arm_link" reason="Adjacent"/>
+  <disable_collisions link1="upper_arm_link" link2="forearm_link" reason="Adjacent"/>
+  <disable_collisions link1="forearm_link" link2="wrist_link" reason="Adjacent"/>
+  <disable_collisions link1="wrist_link" link2="tool0" reason="Adjacent"/>
+  <disable_collisions link1="tool0" link2="left_finger_link" reason="Adjacent"/>
+  <disable_collisions link1="tool0" link2="right_finger_link" reason="Adjacent"/>
+  <!-- Finger inner surfaces touch at zero opening. -->
+  <disable_collisions link1="left_finger_link" link2="right_finger_link" reason="TouchingAtClosed"/>
+  <disable_collisions link1="arm_mount_link" link2="imu_link" reason="RigidFixture"/>
+</robot>

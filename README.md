@@ -3,13 +3,14 @@
 面向 ROS 2 的开源轮臂机器人仿真与具身智能实验平台。
 
 基于 **Ubuntu 22.04、ROS 2 Humble、Gazebo Fortress**，提供差速底盘、4 自由度
-机械臂、室内场景，以及从遥控、建图导航到本地语言指令和视觉问答的完整实验流程。
+机械臂与双指夹爪、室内场景，以及遥控、建图导航、本地语言指令、视觉问答与桌面抓取实验。
 项目持续维护，后续面向视觉语言导航（VLN）和视觉语言动作（VLA）扩展。
 
 当前语言导航基于**已记录的命名目标点**，视觉功能基于**单帧 RGB 问答**；
-尚不具备完整 VLN、自主物体搜索或语言驱动抓取能力。
+抓取基于**受控桌面场景中的 RGB-D 几何定位**。尚不具备完整 VLN、自主物体搜索或语言驱动抓取能力。
 
 [快速开始](#快速开始) · [建图与导航](#建图与导航) · [语言与视觉任务](#语言与视觉任务) ·
+[机械臂规划](#机械臂规划) ·
 [参数与排错](docs/reference.md) · [模型服务](model_service/README.md) · [更新记录](CHANGELOG.md)
 
 ## 能做什么
@@ -17,6 +18,8 @@
 | 模块 | 当前能力 |
 | --- | --- |
 | 机器人与控制 | 差速底盘、4 自由度机械臂、`ros2_control`、键盘组合键遥控 |
+| 机械臂规划 | MoveIt 2、OMPL RRTConnect、关节/末端位置目标、双指夹爪与确认后执行 |
+| 桌面抓取 | RGB-D 圆柱杯定位、水平侧向抓取、视觉抬升验证与放回；限定受控测试场景 |
 | 感知与状态估计 | 2D LiDAR、IMU、RGB-D 相机、轮速里程计与 IMU 的 EKF 融合 |
 | 建图与导航 | `slam_toolbox` 建图与回环、AMCL 固定地图定位、Nav2 规划与避障 |
 | 任务执行 | 命名目标点、顺序多点任务、任务配置、取消处理与执行日志 |
@@ -40,7 +43,7 @@ sudo apt install \
   python3-colcon-common-extensions python3-rosdep python3-tk \
   ros-humble-ros-gz ros-humble-gz-ros2-control ros-humble-ros2-controllers \
   ros-humble-navigation2 ros-humble-nav2-bringup ros-humble-slam-toolbox \
-  ros-humble-robot-localization
+  ros-humble-robot-localization ros-humble-moveit
 ```
 
 基础仿真和导航不需要语言模型、GPU 推理环境或云端 API 密钥。
@@ -76,6 +79,8 @@ source install/setup.bash
 | 基础仿真 | `ros2 launch wheel_arm_gazebo sim.launch.py` | 模型、传感器与控制器实验 |
 | 在线建图导航 | `ros2 launch wheel_arm_gazebo nav.launch.py` | Gazebo、SLAM、Nav2、RViz |
 | 固定地图导航 | `ros2 launch wheel_arm_gazebo nav_localization.launch.py map:=maps/wheel_arm_map.yaml` | 使用自己保存的地图和 AMCL 定位 |
+| 机械臂实验 | `ros2 launch wheel_arm_moveit_config sim.launch.py` | 简单测试场景、MoveIt、机械臂规划 RViz，不启动 Nav2 |
+| RGB-D 抓取 | `ros2 launch wheel_arm_manipulation cup_test.launch.py camera_mount:=mast cup_model:=ceramic_cup` | 高位相机、无柄杯和测试桌，不启动 Nav2 或大模型 |
 
 第一次使用建议从在线建图开始。**仓库不包含已经建好的地图和预置目标点**，
 需要先建图，再使用固定地图和命名点任务。
@@ -185,6 +190,117 @@ ros2 run wheel_arm_navigation mission_runner 厨房 卧室 客厅 \
 目标点与地图绑定，换场景或重新建图后应重新核对。默认导航失败即停止，
 `Ctrl+C` 请求取消；取消终态未确认时，必须人工检查机器人是否停止。
 任务配置、循环、停留及失败策略见[任务参数](docs/reference.md#目标点与任务配置)。
+
+## 机械臂规划
+
+不需要语言模型或地图。先关闭已有仿真、导航任务和键盘遥控，在工作空间根目录启动：
+
+```bash
+source install/setup.bash
+ros2 launch wheel_arm_moveit_config sim.launch.py
+```
+
+这个入口使用已有的简单场景 `empty.sdf`，不是住宅场景；启动 Gazebo、机器人控制器、
+MoveIt `move_group` 和专用 RViz。启动本身不会发送机械臂运动目标。
+等控制器激活、RViz 显示当前机器人状态后，在 **MotionPlanning** 面板中：
+
+1. 选择规划组 `arm`，起点选择当前状态 `<current>`。
+2. 目标选择命名姿态 `ready`，速度和加速度缩放先保持 `0.2`。
+3. 点击 **Plan** 查看轨迹；只有预览合理时，才点击 **Execute**。
+4. 执行完成后重新选择当前状态，再规划到 `home`。
+
+如果已经有一套仿真在运行，不要再次启动上述入口；只连接 MoveIt：
+
+```bash
+ros2 launch wheel_arm_moveit_config moveit.launch.py
+```
+
+规划时底盘必须保持静止，并退出键盘机械臂控制，避免多个客户端同时发目标。
+`tool0` 是夹爪安装参考，`gripper_tcp` 是双指夹爪的抓取参考点。四自由度不能满足任意六维末端位姿，
+第一阶段优先使用命名姿态或关节目标；KDL 的位置 IK 不约束末端朝向。
+
+**Gazebo 场景不会自动变成 MoveIt 的碰撞地图。** 本阶段验证机器人自碰撞和已加入
+Planning Scene 的障碍物，不保证避开住宅家具、地面或其他未导入物体。
+请先在空旷区域测试 `home` 与 `ready`，不要直接在家具旁执行任意拖拽目标。
+无 GUI 模式、参数、配置文件和限制见[机械臂参考](docs/reference.md#机械臂规划参数)。
+
+针对本机 Humble MoveIt 的插件提前卸载导致的退出崩溃，两个入口默认启用项目内的
+插件生命周期兼容库，只作用于 MoveIt 和专用 RViz，不需升级系统或全局设置环境变量。
+这是局部兼容方案，不是上游源码修复；更新后需要重新构建该包并重启。
+诊断结果、代价和关闭开关见[退出兼容方案](docs/reference.md#退出兼容方案)。
+
+### 用命令指定末端位置
+
+保持上面的 MoveIt 仿真运行，在另一个 ROS 终端使用 `wheel_arm_manipulation`：
+
+```bash
+source install/setup.bash
+
+# 查看当前关节值和末端位姿，不要求底盘停稳，也不发送运动指令
+ros2 run wheel_arm_manipulation arm_goal state
+
+# 默认只规划并向 RViz 发布预览，不执行
+ros2 run wheel_arm_manipulation arm_goal position --x 0.55 --y 0 --z 0.65
+
+# 显式请求执行，核对轨迹后仍需输入 y
+ros2 run wheel_arm_manipulation arm_goal position --x 0.55 --y 0 --z 0.65 --execute
+
+# 命名姿态也走同一套检查与确认流程
+ros2 run wheel_arm_manipulation arm_goal named home --execute
+```
+
+XYZ 是 **`tool0` 原点在 `base_footprint` 中的绝对位置**，单位米：X 向前、Y 向左、Z 向上。
+它不是地图坐标，也不是“在当前位置再移动多少”；当前 `tool0` 不是夹爪抓取点。
+只约束位置，不约束末端朝向，也不保证末端沿直线移动。
+
+规划和执行前都要求新鲜关节与里程计反馈、机械臂和底盘停稳。确认后会复查轨迹点碰撞，
+若起点已变化则拒绝执行，不会自动换一条未经预览的轨迹。执行时 `Ctrl+C` 请求取消，
+终态或停稳无法确认时提示人工检查；不与其他控制客户端并发运行。
+参数、无 EKF 时的里程计话题及反馈容差见[末端位置命令](docs/reference.md#末端位置命令)。
+
+### 双指夹爪与 RGB-D 抓取
+
+夹爪规划组为 `gripper`，开口范围为 `0～80 mm`，使用位置控制，不是力控：
+
+```bash
+# 在已启动的 MoveIt 仿真中执行；仍需输入 y 确认
+ros2 run wheel_arm_manipulation arm_goal gripper open --execute
+ros2 run wheel_arm_manipulation arm_goal gripper width --width 0.05 --execute
+```
+
+进行杯子实验时，先关闭其他仿真入口，再启动独立桌面场景：
+
+```bash
+ros2 launch wheel_arm_manipulation cup_test.launch.py \
+  camera_mount:=mast cup_model:=ceramic_cup
+```
+
+另开已加载工作空间的 ROS 终端，按以下顺序操作：
+
+```bash
+# 只测量并显示杯子，不发送运动目标
+ros2 run wheel_arm_manipulation cup_grasp --detect-only
+
+# 预览完整抓放轨迹，不执行
+ros2 run wheel_arm_manipulation cup_grasp
+
+# 核对测量、RViz 轨迹和实际环境，输入 y 后执行
+ros2 run wheel_arm_manipulation cup_grasp --execute
+```
+
+流程为：同步 RGB-D 与拍摄时刻 TF → 拟合桌面及杯身 → 三帧稳定检查 →
+打开夹爪、到预抓取位、水平接近、闭爪、抬升 → 用 RGB-D 检查杯口升高 → 放回并退离。
+杯子位置和直径来自相机测量，不读取 Gazebo 杯子真值；接近方向、侧向抓法及安全距离采用预设策略。
+测试场景中的真值日志仅用于人工对照，不作为识别或抓取输入。
+
+**当前建议固定小车位置和朝向、机械臂起始姿态及桌杯摆位，作为可重复演示。**
+重启此场景可恢复默认摆放；它不是任意姿态、任意物体或复杂家居环境中的通用自主抓取。
+执行前退出遥控、导航及其他机械臂客户端；失败后若仍夹持物体，不会自动松爪或盲目回零。
+
+`camera_mount:=low` 保留原低位模型，`mast` 为高位相机；该测试入口默认仍为低位相机和简化杯子，
+所以 RGB-D 抓取应显式传上面的两个参数。高位相机已上移 27.5 mm，避开立柱顶面重合导致的
+Fortress/Ogre2 异常渲染触发条件。相机诊断、杯子选项、算法假设与 RViz 图层见
+[桌面抓取参考](docs/reference.md#rgb-d-杯子抓取)。
 
 ## 语言与视觉任务
 
@@ -374,6 +490,8 @@ ros2 run wheel_arm_navigation llm_eval --endpoint http://127.0.0.1:11435
 wheelarm-lab/
 ├── wheel_arm_description/  # xacro/URDF、传感器、Gazebo 插件
 ├── wheel_arm_control/      # 底盘和机械臂 ros2_control 配置
+├── wheel_arm_moveit_config/ # SRDF、运动学、OMPL、控制器映射和机械臂 RViz
+├── wheel_arm_manipulation/  # 末端/夹爪命令、RGB-D 杯子定位与确认式抓放
 ├── wheel_arm_gazebo/       # 场景、launch、EKF、SLAM/Nav2、RViz
 ├── wheel_arm_teleop/       # Tk 键盘遥控
 ├── wheel_arm_navigation/   # 命名目标、任务执行、语言解析与视觉观察
@@ -386,6 +504,8 @@ wheelarm-lab/
 | --- | --- |
 | 尺寸、惯量、轮子接触与传感器 | [wheel_arm.urdf.xacro](wheel_arm_description/urdf/wheel_arm.urdf.xacro) |
 | 底盘和机械臂控制器 | [controllers.yaml](wheel_arm_control/config/controllers.yaml) |
+| 机械臂规划组与测试姿态 | [wheel_arm.srdf](wheel_arm_moveit_config/config/wheel_arm.srdf) |
+| 机械臂规划速度与加速度 | [joint_limits.yaml](wheel_arm_moveit_config/config/joint_limits.yaml) |
 | EKF 融合 | [ekf.yaml](wheel_arm_gazebo/config/ekf.yaml) |
 | SLAM、AMCL、Nav2 | [nav2_params.yaml](wheel_arm_gazebo/config/nav2_params.yaml) |
 | 无 EKF 时的对应配置 | [controllers_raw_odom.yaml](wheel_arm_control/config/controllers_raw_odom.yaml)、[nav2_params_raw_odom.yaml](wheel_arm_gazebo/config/nav2_params_raw_odom.yaml) |
@@ -402,6 +522,7 @@ ROS 包测试在工作空间根目录执行：
 
 ```bash
 colcon test --packages-select wheel_arm_gazebo wheel_arm_navigation wheel_arm_teleop \
+  wheel_arm_moveit_config wheel_arm_manipulation \
   --event-handlers console_direct+
 colcon test-result --verbose
 ```
@@ -411,15 +532,17 @@ colcon test-result --verbose
 
 - 仿真定位可能漂移，轮子打滑、碰撞和时间同步都可能影响激光与地图对齐。
 - 在线 SLAM 可通过回环修正地图，固定地图 AMCL 模式不会修改保存地图。
-- 相机安装较低、视野有限；理想仿真深度不等于真实相机噪声模型。
+- 默认相机为低位，可选择高位立柱；视野和遮挡仍有限，理想仿真深度不等于真实相机噪声模型。
+- 杯子抓取限定近水平桌面、直立白灰色无柄圆柱杯；相似容器可能混淆，不支持任意姿态和物体。
+- 抓取只检查 MoveIt 已知碰撞物，不会自动重建所有家具；夹爪位置反馈不等于可靠夹持力。
 - 模型会误解析、遗漏或产生幻觉，格式校验不能替代真实效果评估。
 - 模型与 Gazebo 共享资源，完整仿真并行性能需在使用者硬件上验证。
 - 没有跨进程底盘控制权仲裁，不适合未经验证直接迁移到实机或无人值守运行。
 
 ## 后续方向
 
-- 物体检测与基于深度的空间定位。
-- 任务级移动操作与机械臂规划。
+- 从几何杯子定位扩展到更通用的物体检测与空间感知。
+- 将周围 RGB-D 障碍物接入机械臂碰撞场景，逐步串联导航与抓取。
 - VLN 场景、语义标注、数据采集与评测接口。
 - VLA 策略接入。
 

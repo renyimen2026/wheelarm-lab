@@ -3,7 +3,7 @@ from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, Regi
 from launch.conditions import IfCondition, UnlessCondition
 from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command, EnvironmentVariable, LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import Command, EnvironmentVariable, LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
@@ -24,6 +24,9 @@ def generate_launch_description():
     raw_odom_controllers_file = PathJoinSubstitution(
         [FindPackageShare("wheel_arm_control"), "config", "controllers_raw_odom.yaml"]
     )
+    initial_arm = []
+    for name in ("initial_shoulder_lift", "initial_elbow", "initial_wrist_pitch", "camera_mount"):
+        initial_arm.extend([" " + name + ":=", LaunchConfiguration(name)])
 
     robot_description_content = Command(
         [
@@ -31,7 +34,7 @@ def generate_launch_description():
             robot_model,
             " controllers_file:=",
             ekf_controllers_file,
-        ]
+        ] + initial_arm
     )
 
     raw_odom_robot_description_content = Command(
@@ -40,7 +43,7 @@ def generate_launch_description():
             robot_model,
             " controllers_file:=",
             raw_odom_controllers_file,
-        ]
+        ] + initial_arm
     )
 
     robot_state_publisher = Node(
@@ -71,7 +74,8 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(
             [FindPackageShare("ros_gz_sim"), "/launch/gz_sim.launch.py"]
         ),
-        launch_arguments={"gz_args": ["-r ", world]}.items(),
+        launch_arguments={"gz_args": ["-r ", PythonExpression([
+            "'' if '", LaunchConfiguration("gui"), "'.lower() == 'true' else '-s '"]), world]}.items(),
     )
 
     spawn_robot = Node(
@@ -229,6 +233,18 @@ def generate_launch_description():
         output="screen",
     )
 
+    gripper_controller_spawner = Node(
+        package="controller_manager",
+        executable="spawner",
+        arguments=["gripper_controller", "--controller-manager", "/wheel_arm/controller_manager",
+                   "--controller-manager-timeout", "60", "--service-call-timeout", "60",
+                   "--switch-timeout", "60"],
+        output="screen",
+    )
+    start_gripper_after_arm = RegisterEventHandler(
+        OnProcessExit(target_action=arm_controller_spawner, on_exit=[gripper_controller_spawner])
+    )
+
     start_controllers_after_spawn = RegisterEventHandler(
         OnProcessExit(
             target_action=spawn_robot,
@@ -253,6 +269,12 @@ def generate_launch_description():
     return LaunchDescription(
         [
             DeclareLaunchArgument("use_sim_time", default_value="true"),
+            DeclareLaunchArgument("camera_mount", default_value="low", choices=["low", "mast"]),
+            DeclareLaunchArgument("initial_shoulder_lift", default_value="0.0"),
+            DeclareLaunchArgument("initial_elbow", default_value="0.0"),
+            DeclareLaunchArgument("initial_wrist_pitch", default_value="0.0"),
+            DeclareLaunchArgument("gui", default_value="true",
+                                  description="Open Gazebo GUI; false runs the server only"),
             DeclareLaunchArgument(
                 "world",
                 default_value=PathJoinSubstitution(
@@ -295,5 +317,6 @@ def generate_launch_description():
             start_controllers_after_spawn,
             start_diff_drive_after_joint_states,
             start_arm_after_diff_drive,
+            start_gripper_after_arm,
         ]
     )

@@ -28,8 +28,10 @@
   <exec_depend>xacro</exec_depend>
 
   <test_depend>ament_cmake_pytest</test_depend>
+  <test_depend>cv_bridge</test_depend>
   <test_depend>geometry_msgs</test_depend>
   <test_depend>lifecycle_msgs</test_depend>
+  <test_depend>python3-numpy</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

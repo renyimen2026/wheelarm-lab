@@ -11,6 +11,9 @@
     arm_controller:
       type: joint_trajectory_controller/JointTrajectoryController
 
+    gripper_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
 /**/diff_drive_base_controller:
   ros__parameters:
     left_wheel_names: ["left_wheel_joint"]
@@ -41,6 +44,19 @@
     angular.z.has_acceleration_limits: true
     angular.z.max_acceleration: 3.0
     angular.z.min_acceleration: -3.0
+
+/**/gripper_controller:
+  ros__parameters:
+    joints: [left_finger_joint, right_finger_joint]
+    command_interfaces: [position]
+    state_interfaces: [position, velocity]
+    allow_partial_joints_goal: false
+    allow_nonzero_velocity_at_trajectory_end: false
+    constraints:
+      stopped_velocity_tolerance: 0.005
+      goal_time: 2.0
+      left_finger_joint: {trajectory: 0.01, goal: 0.001}
+      right_finger_joint: {trajectory: 0.01, goal: 0.001}
 
 /**/arm_controller:
   ros__parameters:

@@ -19,6 +19,8 @@ if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_pytest_test(initial_pose test/test_initial_pose.py)
   ament_add_pytest_test(initial_pose_ros test/test_initial_pose_ros.py)
+  ament_add_pytest_test(ceramic_mug test/test_ceramic_mug.py)
+  ament_add_pytest_test(rgbd_rendering test/test_rgbd_rendering.py TIMEOUT 90)
 endif()
 
 ament_package()
