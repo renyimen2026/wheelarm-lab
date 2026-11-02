@@ -530,7 +530,7 @@
       <include>
         <uri>model://aws_robomaker_residential_Trash_01</uri>
       </include>
-      <pose>2.360151 -0.796238 0.011 0 -0 0</pose>
+      <pose>2.860151 -1.296238 0.011 0 -0 0</pose>
     </model>
     <model name="Trash_01_002">
       <static>true</static>

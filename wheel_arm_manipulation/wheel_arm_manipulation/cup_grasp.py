@@ -36,6 +36,8 @@ def parser():
     result.add_argument("--velocity", type=scaling, default=.2)
     result.add_argument("--acceleration", type=scaling, default=.2)
     result.add_argument("--lift-height", type=positive, default=.08)
+    result.add_argument("--finish", choices=("place", "hold"), default="place",
+                        help="place 抓起后放回；hold 抓起并保持夹持")
     result.add_argument("--rgb-topic", default="/camera/image")
     result.add_argument("--depth-topic", default="/camera/depth_image")
     result.add_argument("--info-topic", default="/camera/camera_info")
@@ -99,6 +101,7 @@ class CupGraspClient(ArmGoalClient):
         self.stationary_models = (self.arm, self.gripper)
         self.attachment = None
         self.closed = False
+        self.holding_verified = False
         self.base_anchor = None
         self.kinematics = GraspKinematics(self.arm)
         self.observer = CupObserver(self, options)
@@ -165,6 +168,8 @@ class CupGraspClient(ArmGoalClient):
                   ("approach", self.arm, center, None), ("close", self.gripper, None, width),
                   ("lift", self.arm, lifted, None), ("lower", self.arm, center, None),
                   ("release", self.gripper, None, .08), ("retreat", self.arm, pre, None)]
+        if getattr(self.options, "finish", "place") == "hold":
+            stages = stages[:5]
         try:
             for label, model, target, opening in stages:
                 self.model = model
@@ -221,7 +226,7 @@ class CupGraspClient(ArmGoalClient):
                     raise RuntimeError("完整关节状态偏离预览，原任务作废")
             if label in ("approach", "close"):
                 print("[复查] 重新采集 RGB-D，确认杯子未移动...", flush=True)
-                unchanged(cup, self.observer.capture())
+                unchanged(cup, self.observer.capture(label=label+"_recheck"))
             if label == "lift":
                 self.model = self.arm
                 scene.attach(self.kinematics.forward(values_from_state(current, self.arm)))
@@ -240,27 +245,31 @@ class CupGraspClient(ArmGoalClient):
                 self.check_fk(self.joints, target)
             if label == "lift":
                 print("[验证] 使用 RGB-D 检查杯子是否随夹爪升高...", flush=True)
-                raised = self.observer.capture(require_support=False)
+                raised = self.observer.capture(require_support=False, label="lift_verification")
                 delta = verify_lift(cup, raised, self.options.lift_height)
                 print(f"[视觉确认] 杯口升高 {delta*1000:.1f} mm；非力传感器确认", flush=True)
+                self.holding_verified = True
                 end = time.monotonic()+1
                 while time.monotonic() < end:
                     rclpy.spin_once(self, timeout_sec=.02)
             if label == "retreat":
-                placed = self.observer.capture()
+                placed = self.observer.capture(label="placed_verification")
                 if np.linalg.norm(placed.center-cup.center) > .015:
                     raise RuntimeError("放下后位置偏离原目标超过 15 mm，请检查杯子")
-        print("[完成] RGB-D 定位、抓取、视觉抬升验证、放回和退离均完成。", flush=True)
+        if getattr(self.options, "finish", "place") == "hold":
+            print("[完成] 杯子已抓起并通过 RGB-D 抬升验证，保持夹持；未放回、未递送。", flush=True)
+        else:
+            print("[完成] RGB-D 定位、抓取、视觉抬升验证、放回和退离均完成。", flush=True)
 
 
-def run(node, options):
-    if options.execute and not sys.stdin.isatty():
+def run(node, options, confirm=None):
+    if options.execute and confirm is None and not sys.stdin.isatty():
         raise ValueError("执行必须在交互终端确认，不接受管道输入")
     print("[检查] 请停止导航、遥控和其他机械臂任务；当前仅针对桌面直立无柄陶瓷杯。", flush=True)
     node.snapshot()
     node.base_anchor = copy.deepcopy(node.odom.pose.pose)
     print("[识别] 同步 RGB-D，拟合桌面和杯身，等待三帧稳定结果...", flush=True)
-    cup = node.observer.capture()
+    cup = node.observer.capture(label="initial_measurement")
     print("[测量] " + json.dumps({"frame": node.model.frame, "center": cup.center.tolist(),
           "diameter": 2*cup.radius, "height": cup.height, "fit_rmse": cup.residual}), flush=True)
     print("[限制] 几何识别不是通用语义识别；相似圆柱容器可能混淆。仅检查 MoveIt 已知碰撞物。", flush=True)
@@ -275,16 +284,22 @@ def run(node, options):
         if not options.execute:
             print("[预览] 已规划完整流程，未发送运动目标。增加 --execute 后仍需确认。", flush=True)
             return 0
-        if input("确认测量、RViz 轨迹和环境安全，执行抓取并放回？[y/N] ").strip().lower() != "y":
+        prompt = "确认测量、RViz 轨迹和环境安全，执行抓取" + (
+            "并保持夹持" if getattr(options, "finish", "place") == "hold" else "并放回") + "？[y/N] "
+        accepted = confirm() if confirm is not None else input(prompt).strip().lower() == "y"
+        if not accepted:
             print("[取消] 未执行。", flush=True)
             return 0
         node.snapshot()
-        unchanged(cup, node.observer.capture())
+        unchanged(cup, node.observer.capture(label="before_execute"))
         node.perform(plans, cup, scene)
         return 0
     finally:
         if node.closed:
-            print("[安全] 夹持状态未解除，未自动松爪；保留规划碰撞对象。请人工检查，重启测试场景后再试。", flush=True)
+            if node.holding_verified:
+                print("[保持] 保留夹持及规划附着对象；请勿继续导航，处理杯子后再启动新任务。", flush=True)
+            else:
+                print("[安全] 夹持状态未解除，未自动松爪；保留规划碰撞对象。请人工检查，重启测试场景后再试。", flush=True)
         else:
             node.model = node.arm
             scene.cleanup()

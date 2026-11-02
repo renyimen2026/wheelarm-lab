@@ -9,6 +9,7 @@ setup(
         ("share/ament_index/resource_index/packages", ["resource/wheel_arm_manipulation"]),
         ("share/wheel_arm_manipulation", ["package.xml"]),
         ("share/wheel_arm_manipulation/launch", glob("launch/*.launch.py")),
+        ("share/wheel_arm_manipulation/config", glob("config/*.yaml")),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
@@ -20,5 +21,6 @@ setup(
     entry_points={"console_scripts": ["arm_goal = wheel_arm_manipulation.arm_goal:main",
                                     "cup_grasp = wheel_arm_manipulation.cup_grasp:main",
                                     "camera_check = wheel_arm_manipulation.camera_check:main",
+                                    "living_room_fixture = wheel_arm_manipulation.living_room_fixture:main",
                                     "grasp_fixture = wheel_arm_manipulation.grasp_fixture:main"]},
 )

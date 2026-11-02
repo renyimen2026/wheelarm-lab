@@ -70,11 +70,36 @@ def run_execution(task, document, options, argv, source, on_stage=None):
                 raise RuntimeError("等待预加载耗尽视觉推理时间预算；已保留拍摄图片")
             if on_stage is not None:
                 on_stage("recognizing", {"goal": task["goal"], "question": question})
+            if source.get("action") == "pick_cup":
+                from wheel_arm_navigation.cup_gate import confirm, require_cup
+                result, elapsed = confirm(image, options.vision_model, options.endpoint, remaining)
+                source["cup_confirmation"] = result
+                if on_stage is not None:
+                    on_stage("cup_checked", result)
+                require_cup(result)
+                return {"summary": result["evidence"], "objects": [{"name": "无柄杯子",
+                        "image_region": "unknown", "evidence": result["evidence"]}],
+                        "uncertainties": []}, elapsed
             return vision.describe(image, question, options.vision_model, options.endpoint, remaining)
+
+        def pickup():
+            from wheel_arm_navigation.cup_pick import execute
+            # Recheck stopped pose after potentially lengthy CPU vision inference.
+            node.capture_at_goal(document["goals"][task["goal"]], document["frame_id"])
+            return execute(options, node, on_stage)
 
         def preflight():
             node.phase = "preflight"
             try:
+                if source.get("interaction") == "terminal_chat":
+                    from wheel_arm_navigation.cup_pick import check_ready
+                    check_ready(node, required=source.get("action") == "pick_cup")
+                if source.get("action") == "pick_cup":
+                    from ament_index_python.packages import get_package_share_directory
+                    from wheel_arm_manipulation.house_navigation import validate_goal
+                    validate_goal(options.house_layout, options.house_reference,
+                                  get_package_share_directory("wheel_arm_gazebo"),
+                                  document["goals"][task["goal"]])
                 info = observe_llm.check_vision_model(options.vision_model, options.endpoint, min(options.vision_timeout, 30))
                 preload.enable(info.get("preload_supported", False) and not options.no_vision_preload)
                 return info
@@ -84,7 +109,8 @@ def run_execution(task, document, options, argv, source, on_stage=None):
         code, _ = execute(task, document, options.file, options, node.navigate_pose,
                           node.capture_at_goal, infer, preflight, lambda: node.stopping,
                           node.get_logger().info, source, preload_snapshot=preload.snapshot,
-                          on_stage=on_stage)
+                          on_stage=on_stage,
+                          after_observation=pickup if source.get("action") == "pick_cup" else None)
         return code
     finally:
         if preload is not None:
@@ -97,7 +123,7 @@ def run_execution(task, document, options, argv, source, on_stage=None):
             rclpy.shutdown()
 
 
-def run(options, argv, on_stage=None, session_id=None):
+def run(options, argv, on_stage=None, session_id=None, parse_instruction=None):
     if not 0 < options.vision_timeout <= 600:
         raise ValueError("视觉超时必须在 0 至 600 秒之间")
     if options.settle_duration >= options.capture_wait:
@@ -105,14 +131,17 @@ def run(options, argv, on_stage=None, session_id=None):
     document = load(options.file)
     if on_stage is not None:
         on_stage("parsing", {"instruction": options.instruction})
-    response, task, elapsed = observe_llm.parse_instruction(
+    response, task, elapsed = (parse_instruction or observe_llm.parse_instruction)(
         options.instruction, document, options.model, options.endpoint, options.llm_timeout)
     print(f"解析状态：{response['status']}；耗时：{elapsed:g} 秒；{response['message']}")
     if task is None:
         print("未启动导航，请明确地点和观察问题。")
         return 1
+    action = task.pop("action", "observe")
+    if action == "pick_cup":
+        options.goal_xy_tolerance, options.goal_yaw_tolerance = .065, .085
     if on_stage is not None:
-        on_stage("parsed", {**task, "elapsed_sec": elapsed})
+        on_stage("parsed", {**task, "action": action, "elapsed_sec": elapsed})
     print(json.dumps(task, ensure_ascii=False, indent=2))
     print("目标位姿：" + json.dumps(document["goals"][task["goal"]], ensure_ascii=False))
     if options.preview:
@@ -121,12 +150,13 @@ def run(options, argv, on_stage=None, session_id=None):
     if not sys.stdin.isatty():
         raise ValueError("执行需要交互终端确认；非交互环境请使用 --preview")
     print("请确认定位正常、目标朝向合适，并退出键盘遥控和其他导航任务。")
-    if input("执行导航并单帧观察？[y/N] ").strip().lower() != "y":
+    prompt = "执行导航、视觉确认杯子并抓起保持？[y/N] " if action == "pick_cup" else "执行导航并单帧观察？[y/N] "
+    if input(prompt).strip().lower() != "y":
         print("已取消，未启动任务。")
         return 0
     source = {"kind": "local_llm_observe", "instruction": options.instruction,
               "model": options.model, "vision_model": options.vision_model, "endpoint": options.endpoint,
-              "parse_sec": elapsed, "response": response, "confirmed": True}
+              "parse_sec": elapsed, "response": response, "confirmed": True, "action": action}
     if session_id is not None:
         source.update(interaction="terminal_chat", session_id=session_id)
     if on_stage is not None:

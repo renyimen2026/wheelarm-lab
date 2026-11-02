@@ -17,7 +17,7 @@ pytestmark = pytest.mark.skipif(os.environ.get("WHEELARM_GAZEBO_TEST") != "1",
                                 reason="Opt-in RGB-D grasp against Gazebo")
 
 
-@pytest.mark.parametrize("placement", ["default", "shifted", "relocated_base"])
+@pytest.mark.parametrize("placement", ["default", "shifted", "relocated_base", "living_room"])
 def test_rgbd_grasp_without_simulator_pose_input(tmp_path, placement):
     if os.environ.get("ROS_DOMAIN_ID", "0") == "0":
         pytest.fail("Use an explicit unused ROS domain")
@@ -35,8 +35,10 @@ def test_rgbd_grasp_without_simulator_pose_input(tmp_path, placement):
                        GZ_PARTITION=f"rgbd-grasp-test-{os.getpid()}-{placement}")
     log_path = tmp_path / "simulation.log"
     log = log_path.open("w")
-    simulation = subprocess.Popen(["ros2", "launch", "wheel_arm_manipulation", "cup_test.launch.py",
-        "camera_mount:=mast", "cup_model:=ceramic_cup", "gui:="+os.environ.get("WHEELARM_GAZEBO_GUI", "false"),
+    launch = (["living_room.launch.py"] if placement == "living_room" else
+              ["cup_test.launch.py", "camera_mount:=mast", "cup_model:=ceramic_cup"])
+    simulation = subprocess.Popen(["ros2", "launch", "wheel_arm_manipulation", *launch,
+        "gui:="+os.environ.get("WHEELARM_GAZEBO_GUI", "false"),
         "rviz:=false"],
         env=environment, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
 
@@ -74,6 +76,8 @@ def test_rgbd_grasp_without_simulator_pose_input(tmp_path, placement):
                 assert answered, text
             return text
         finally:
+            if output:
+                (tmp_path / "last-cli.log").write_text(output.decode(errors="replace"))
             if process.poll() is None:
                 os.killpg(process.pid, signal.SIGINT)
                 try:
@@ -124,6 +128,12 @@ def test_rgbd_grasp_without_simulator_pose_input(tmp_path, placement):
         text = cli(["--detect-only"])
         record = json.loads(next(line[len("[测量] "):] for line in text.splitlines() if line.startswith("[测量] ")))
         expected = np.array([initial.x, initial.y, initial.z])
+        if placement == "living_room":
+            from ament_index_python.packages import get_package_share_directory
+            from wheel_arm_manipulation.living_room import layout
+            share = Path(get_package_share_directory("wheel_arm_manipulation"))
+            base = layout(share / "config/living_room.yaml", get_package_share_directory("wheel_arm_gazebo"))[-1]
+            expected = base[:3, :3].T @ (expected-base[:3, 3])
         if placement == "relocated_base":
             from scipy.spatial.transform import Rotation
             expected = Rotation.from_euler("z", .1).apply(expected-np.array([-.01, -.06, 0.]))
@@ -160,4 +170,5 @@ def test_rgbd_grasp_without_simulator_pose_input(tmp_path, placement):
         simulation.wait()
         log.close()
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()

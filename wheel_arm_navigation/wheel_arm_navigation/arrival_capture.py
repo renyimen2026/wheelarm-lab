@@ -129,7 +129,8 @@ class ObserveClient(GoalClient):
                     stamp = Time.from_msg(message.header.stamp)
                     base = self.buffer.lookup_transform(frame_id, "base_footprint", stamp)
                     camera = self.buffer.lookup_transform(frame_id, message.header.frame_id, stamp)
-                    if not near_goal(base, pose):
+                    if not near_goal(base, pose, getattr(self.options, "goal_xy_tolerance", .35),
+                                     getattr(self.options, "goal_yaw_tolerance", .35)):
                         raise ValueError("拍摄时刻地图位姿偏离目标位置或朝向")
                 except (ValueError, TransformException) as error:
                     reason = str(error)

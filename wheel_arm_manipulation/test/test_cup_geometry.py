@@ -126,3 +126,46 @@ def test_sample_headers_calibration_and_time(mode):
     else:
         with pytest.raises(ValueError):
             validate_sample(rgb, depth, info, now, after, "camera_optical_frame")
+
+
+def test_failed_capture_preserves_first_and_last_rgbd(tmp_path, monkeypatch):
+    import json
+    import time
+    from types import SimpleNamespace
+    from geometry_msgs.msg import TransformStamped
+    from wheel_arm_manipulation import cup_perception
+
+    observer = object.__new__(cup_perception.CupObserver)
+    clock = [10_000_000_000]
+    observer.node = SimpleNamespace(stopping=False, model=SimpleNamespace(frame="base_footprint"),
+        get_clock=lambda: SimpleNamespace(now=lambda: SimpleNamespace(nanoseconds=clock[0])))
+    observer.options = SimpleNamespace(wait=.04, output_dir=str(tmp_path), camera_frame="camera_optical_frame")
+    observer.sample = None
+    observer.clear = lambda: None
+    tf = TransformStamped()
+    tf.transform.rotation.w = 1.
+    observer.buffer = SimpleNamespace(lookup_transform=lambda *_: tf)
+    observer.bridge = SimpleNamespace(imgmsg_to_cv2=lambda _, encoding:
+        np.zeros((6, 8, 3), dtype=np.uint8) if encoding == "bgr8" else np.ones((6, 8), dtype=np.float32))
+
+    def spin(*_, **__):
+        clock[0] += 1_000_000
+        rgb, depth = Image(width=8, height=6), Image(width=8, height=6, encoding="32FC1")
+        info = CameraInfo(width=8, height=6, k=[10., 0., 4., 0., 10., 3., 0., 0., 1.])
+        for message in (rgb, depth, info):
+            message.header.frame_id = "camera_optical_frame"
+            message.header.stamp.sec, message.header.stamp.nanosec = divmod(clock[0], 10**9)
+        observer.sample = rgb, depth, info, time.monotonic()
+
+    def reject(*_):
+        raise ValueError("test cup occlusion")
+    monkeypatch.setattr(cup_perception.rclpy, "ok", lambda: True)
+    monkeypatch.setattr(cup_perception.rclpy, "spin_once", spin)
+    monkeypatch.setattr(cup_perception, "detect_cup", reject)
+    with pytest.raises(RuntimeError, match="test cup occlusion"):
+        observer.capture(require_support=False, label="lift_verification")
+    directory, = tmp_path.iterdir()
+    assert (directory / "rgb.png").is_file() and (directory / "last_rgb.png").is_file()
+    with np.load(directory / "geometry.npz") as first, np.load(directory / "last_geometry.npz") as last:
+        assert last["stamp_ns"] >= first["stamp_ns"]
+    assert json.loads((directory / "result.json").read_text())["status"] == "failed"

@@ -41,6 +41,8 @@ def generate_launch_description():
             "spawn_y": LaunchConfiguration("spawn_y"),
             "spawn_z": LaunchConfiguration("spawn_z"),
             "spawn_yaw": LaunchConfiguration("spawn_yaw"),
+            **{key: LaunchConfiguration(key) for key in (
+                "camera_mount", "gui", "initial_shoulder_lift", "initial_elbow", "initial_wrist_pitch")},
         }.items(),
     )
 
@@ -121,6 +123,11 @@ def generate_launch_description():
             DeclareLaunchArgument("spawn_y", default_value="1.0"),
             DeclareLaunchArgument("spawn_z", default_value="0.05"),
             DeclareLaunchArgument("spawn_yaw", default_value="0.0"),
+            DeclareLaunchArgument("camera_mount", default_value="low", choices=["low", "mast"]),
+            DeclareLaunchArgument("gui", default_value="true"),
+            DeclareLaunchArgument("initial_shoulder_lift", default_value="0.0"),
+            DeclareLaunchArgument("initial_elbow", default_value="0.0"),
+            DeclareLaunchArgument("initial_wrist_pitch", default_value="0.0"),
             DeclareLaunchArgument("localization_debug", default_value="true"),
             DeclareLaunchArgument(
                 "rviz_config",

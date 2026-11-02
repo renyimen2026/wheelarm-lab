@@ -191,3 +191,26 @@ def test_cli_confirmation(monkeypatch, document, mode):
     else:
         assert language_observe.run(options, ["language_observe"]) == (1 if mode == "clarify" else 0)
     assert len(calls) == (1 if mode == "confirm" else 0)
+
+
+@pytest.mark.parametrize("confirmation", ["found", "not_found", "uncertain", "invalid"])
+def test_pick_runs_only_after_positive_vision(tmp_path, document, confirmation):
+    from wheel_arm_navigation.cup_gate import require_cup
+    options = language_observe.parser().parse_args(["task", "--log-dir", str(tmp_path / "logs"),
+                                                   "--observations-dir", str(tmp_path / "images")])
+    calls = []
+    def infer(*_):
+        require_cup({"status": confirmation, "count": 0 if confirmation == "not_found" else 1,
+                     "evidence": "当前相机画面"})
+        return {"summary": "杯子", "objects": [], "uncertainties": []}, 1
+    def pickup():
+        calls.append("pick")
+        return {"status": "holding"}
+    _, encoded = cv2.imencode(".png", np.zeros((3, 4, 3), dtype=np.uint8))
+    code, path = observe_task.execute({"goal": "厨房", "question": "杯子？"}, document, "goals.yaml", options,
+        lambda *_: NavigationResult("succeeded", safe_to_continue=True),
+        lambda *_: (encoded.tobytes(), {"observation_kind": "rgb", "image_size": {"width": 4, "height": 3}}),
+        infer, lambda: {}, lambda: False, lambda *_: None, {"confirmed": True}, after_observation=pickup)
+    assert calls == (["pick"] if confirmation == "found" else [])
+    assert code == (0 if confirmation == "found" else 1)
+    assert json.loads(path.read_text())["status"] == ("holding" if confirmation == "found" else "vision_failed")

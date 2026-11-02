@@ -2,6 +2,7 @@
 
 from collections import deque
 import copy
+import json
 from pathlib import Path
 import time
 
@@ -75,12 +76,14 @@ class CupObserver:
     def clear(self):
         self.markers.publish(MarkerArray(markers=[Marker(action=Marker.DELETEALL)]))
 
-    def capture(self, require_support=True, wait=None):
+    def capture(self, require_support=True, wait=None, label="capture"):
         after, started = self.node.get_clock().now().nanoseconds, time.monotonic()
         deadline = started + (self.options.wait if wait is None else wait)
         observations, last_stamp = deque(maxlen=3), -1
         reason = "等待同步 RGB-D、相机内参和拍摄时刻 TF"
         saved = False
+        evidence = None
+        last_evidence = None
         while rclpy.ok() and time.monotonic() < deadline:
             if self.node.stopping:
                 raise KeyboardInterrupt()
@@ -102,14 +105,19 @@ class CupObserver:
                 elif depth.encoding != "32FC1":
                     raise ValueError("深度只支持 32FC1 米或 16UC1 毫米")
                 matrix = transform_matrix(transform)
+                last_evidence = (bgr, array, np.array(info.k), matrix, stamp_ns(rgb))
                 if self.options.output_dir and not saved:
                     import cv2
-                    path = Path(self.options.output_dir).expanduser() / f"capture-{time.time_ns()}"
+                    path = Path(self.options.output_dir).expanduser() / f"capture-{time.time_ns()}-{label}"
                     path.mkdir(parents=True, exist_ok=False)
                     if not cv2.imwrite(str(path / "rgb.png"), bgr):
                         raise OSError("相机证据图片写入失败")
                     np.savez_compressed(path / "geometry.npz", depth=array, k=np.array(info.k), transform=matrix,
                                         stamp_ns=stamp_ns(rgb), frame=self.node.model.frame)
+                    evidence = path / "result.json"
+                    evidence.write_text(json.dumps({"stage": label, "require_support": require_support,
+                        "status": "processing", "stamp_ns": stamp_ns(rgb)}, indent=2), encoding="utf-8")
+                    print(f"[相机证据] {path}", flush=True)
                     saved = True
                 if not np.any(np.isfinite(array) & (array > 0)):
                     stats = depth_statistics(array)
@@ -128,8 +136,22 @@ class CupObserver:
                     observations.clear()
                 continue
             self.publish(stable, rgb, bgr)
+            if evidence is not None:
+                evidence.write_text(json.dumps({"stage": label, "status": "detected",
+                    "center": stable.center.tolist(), "top": stable.top,
+                    "require_support": require_support}, indent=2), encoding="utf-8")
             return stable
         self.clear()
+        if evidence is not None:
+            if last_evidence is not None:
+                import cv2
+                color, depth_array, intrinsic, tf, stamp = last_evidence
+                if not cv2.imwrite(str(evidence.parent / "last_rgb.png"), color):
+                    raise OSError("最后一帧相机证据写入失败")
+                np.savez_compressed(evidence.parent / "last_geometry.npz", depth=depth_array,
+                                    k=intrinsic, transform=tf, stamp_ns=stamp, frame=self.node.model.frame)
+            evidence.write_text(json.dumps({"stage": label, "status": "failed", "reason": reason,
+                "require_support": require_support}, ensure_ascii=False, indent=2), encoding="utf-8")
         raise RuntimeError("视觉定位超时：" + reason)
 
     def publish(self, cup, rgb, bgr):

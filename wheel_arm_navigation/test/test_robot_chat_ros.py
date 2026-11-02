@@ -40,9 +40,9 @@ def test_persistent_terminal_flow(server, sensors, tmp_path, mode):
                 result = {"summary": "当前画面没有确认杯子", "objects": [], "uncertainties": ["画面有遮挡"]}
                 response = {"done": True, "message": {"content": json.dumps(result)}}
             else:
-                result = {"status": "ready", "message": "到达后观察", "goal": "厨房", "question": "看到杯子吗？"}
+                result = {"status": "ready", "message": "到达后观察", "goal": "厨房", "question": "看到杯子吗？", "action": "observe"}
                 if mode == "parse_failure":
-                    result.update(status="clarify", message="请明确地点", goal="", question="")
+                    result.update(status="clarify", message="请明确地点", goal="", question="", action="")
                 response = {"done": True, "message": {"content": json.dumps(result)}}
             self.send_response(200)
             self.end_headers()

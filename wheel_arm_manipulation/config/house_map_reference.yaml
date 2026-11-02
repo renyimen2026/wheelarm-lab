@@ -1,0 +1,4 @@
+# Reference for maps/wheel_arm_map.yaml, originally mapped from this spawn.
+# Replace this reference when using a different map; these are not odom poses.
+world_pose: [3.5, 1.0, 0.0]
+map_pose: [0.0, 0.0, 0.0]

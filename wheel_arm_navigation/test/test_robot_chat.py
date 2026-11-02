@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from wheel_arm_navigation import language_observe, observe_llm, robot_chat
+from wheel_arm_navigation import chat_llm, language_observe, robot_chat
 
 
 @pytest.fixture(autouse=True)
@@ -114,7 +114,7 @@ def test_chat_still_uses_real_confirmation_gate(monkeypatch, mode):
     document = {"frame_id": "map", "goals": {"厨房": {"x": 1, "y": 2, "yaw": 0}}}
     response = {"status": "ready", "message": "观察", "goal": "厨房", "question": "看到杯子吗？"}
     monkeypatch.setattr(language_observe, "load", lambda *_: document)
-    monkeypatch.setattr(observe_llm, "parse_instruction", lambda *_: (
+    monkeypatch.setattr(chat_llm, "parse_instruction", lambda *_: (
         response, None if mode == "clarify" else {"goal": "厨房", "question": "看到杯子吗？"}, 1))
     monkeypatch.setattr("builtins.input", lambda *_: "y" if mode == "confirm" else "n")
     calls = []

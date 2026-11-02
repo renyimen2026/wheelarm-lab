@@ -1,0 +1,18 @@
+# Controlled reproduction in the unmodified AWS small-house living room.
+# Bounds below are in each asset's local meters, loaded with Gazebo MeshManager.
+# Verified world dock: x=1.853884 m, y=-0.889980 m, yaw=-1.560796 rad.
+# This is not a map-frame navigation goal; record localized TF before navigation.
+name: 客厅
+table_model: CoffeeTable_01_001
+cup_offset: [0.35, 0.20]
+cup_world_x_offset: 0.05
+cup_height: 0.10
+stand_off: 0.64
+collision_bounds:
+  CoffeeTable_01_001: [[-0.657050, -0.329538, 0.0], [0.669879, 0.338629, 0.323764]]
+  SofaC_01_001: [[-1.212180, -1.231450, -0.000200], [1.219480, 1.226270, 0.972114]]
+  Tablet_01_001: [[-0.057966, -0.096864, 0.0], [0.057898, 0.096713, 0.009664]]
+  DeskPortraitA_02: [[-0.085074, -0.086558, -0.000594], [0.084477, 0.018642, 0.226581]]
+  DeskPortraitC_02: [[-0.085240, -0.043796, -0.002229], [0.085115, 0.043327, 0.169496]]
+  DeskPortraitD_03: [[-0.074366, -0.021629, -0.000185], [0.074258, 0.021590, 0.132380]]
+  Trash_01_001: [[-0.143780, -0.143414, -0.000904], [0.143526, 0.143081, 0.344432]]

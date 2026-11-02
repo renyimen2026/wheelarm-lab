@@ -11,12 +11,13 @@ from wheel_arm_navigation import vision
 
 
 def execute(task, document, goals_file, options, navigate, capture, infer,
-            preflight, stopping, progress, source, preload_snapshot=None, on_stage=None):
+            preflight, stopping, progress, source, preload_snapshot=None, on_stage=None,
+            after_observation=None):
     if (not isinstance(task, dict) or set(task) != {"goal", "question"}
             or not isinstance(task["goal"], str) or not isinstance(task["question"], str)
             or not task["question"].strip() or len(task["question"]) > 500):
         raise ValueError("必须是单个精确地点和一个观察问题")
-    plan = validate_task({"name": "navigate_observe", "goals": [task["goal"]],
+    plan = validate_task({"name": "navigate_observe_pick" if after_observation is not None else "navigate_observe", "goals": [task["goal"]],
                           "wait": options.nav_wait, "timeout": options.nav_timeout})
     check_goals(plan, document)
     journal = Journal(options.log_dir, plan, document, goals_file, source)
@@ -89,20 +90,40 @@ def execute(task, document, goals_file, options, navigate, capture, infer,
                       "source_mode": "after_navigation", "input_modalities": ["rgb"],
                       "image_stamps": metadata.get("stamps"), "result": result,
                       "limitations": ["仅当前单帧视角，没看到不等于房间不存在", "模型结果未经独立验证",
-                                       "没有自主搜索、深度物体定位或抓取"]}
+                                       "没有自主搜索；抓取坐标另由 RGB-D 几何测量提供" if after_observation is not None
+                                       else "没有自主搜索、深度物体定位或抓取"]}
             report_path = save_report(directory / "descriptions", report)
             observation.update(status="completed", report=str(report_path), result=result, elapsed_sec=elapsed)
-            status, code = "completed", 0
-            if on_stage is not None:
+            if after_observation is not None:
+                phase, status = "grasp", "unsafe_stop"
+                journal.data["grasp"] = {"status": "running"}
+                journal.flush()
+                journal.data["grasp"] = after_observation()
+                if not isinstance(journal.data["grasp"], dict) or journal.data["grasp"].get("status") != "holding":
+                    raise RuntimeError("抓取阶段未确认保持夹持状态")
+                journal.flush()
+                status, code = "holding", 0
+            else:
+                status, code = "completed", 0
+            if on_stage is not None and after_observation is None:
                 on_stage("completed", {"goal": task["goal"], "result": result,
                                         "report": str(report_path)})
             progress("当前画面观察结果：" + result["summary"])
-            progress("注意：单帧没看到某物，不代表目标地点不存在该物体。")
+            if after_observation is None:
+                progress("注意：单帧没看到某物，不代表目标地点不存在该物体。")
     except KeyboardInterrupt:
-        status, code = "canceled", 130
-        observation.update(status="canceled", reason=f"任务在 {phase} 阶段中断")
+        status, code = ("unsafe_stop" if phase == "grasp" else "canceled"), 130
+        if phase == "grasp":
+            journal.data["grasp"] = {"status": "unconfirmed", "reason": "抓取阶段中断"}
+            observation["reason"] = "抓取阶段中断"
+        else:
+            observation.update(status="canceled", reason=f"任务在 {phase} 阶段中断")
     except Exception as error:
-        observation.update(status="failed" if phase != "navigation" else "not_run", reason=str(error))
+        if phase == "grasp":
+            journal.data["grasp"] = {"status": "unconfirmed", "reason": str(error)}
+            observation["reason"] = str(error)
+        else:
+            observation.update(status="failed" if phase != "navigation" else "not_run", reason=str(error))
         if phase == "navigation":
             status = "unsafe_stop"
             step.update(status="error", reason=str(error), safe_to_continue=False, finished_at=utc_now())
