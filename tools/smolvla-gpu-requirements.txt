@@ -1,0 +1,13 @@
+# Isolated GPU import/forward environment, using --torch-backend cu118.
+# Keep the validated dataset-library versions while adding SmolVLA dependencies.
+lerobot[smolvla]==0.4.4
+torch==2.7.1
+torchvision==0.22.1
+# Keep decoding on CPU: the CUDA decoder additionally requires NPP libraries.
+-r torchcodec-cpu-requirements.txt
+transformers==4.57.1
+num2words==0.5.14
+datasets==4.8.5
+pyarrow==25.0.1
+numpy==2.2.6
+Pillow==12.3.0

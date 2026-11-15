@@ -24,6 +24,7 @@ from wheel_arm_manipulation.cup_perception import CupObserver
 from wheel_arm_manipulation.grasp_kinematics import GraspKinematics
 from wheel_arm_manipulation.grasp_scene import GraspScene
 from wheel_arm_manipulation.planning import load_model, validate_trajectory, values_from_state
+from wheel_arm_manipulation.task_metadata import run_with_metadata, task_event
 
 
 def parser():
@@ -38,11 +39,14 @@ def parser():
     result.add_argument("--lift-height", type=positive, default=.08)
     result.add_argument("--finish", choices=("place", "hold"), default="place",
                         help="place 抓起后放回；hold 抓起并保持夹持")
+    result.add_argument("--hold-seconds", type=positive, default=1.,
+                        help="hold 模式抬升验证后继续记录的仿真秒数（1～30 秒）；大于 1 秒时结束再视觉验证")
     result.add_argument("--rgb-topic", default="/camera/image")
     result.add_argument("--depth-topic", default="/camera/depth_image")
     result.add_argument("--info-topic", default="/camera/camera_info")
     result.add_argument("--camera-frame", default="camera_optical_frame")
     result.add_argument("--output-dir", help="可选：保存每次采集的首帧 RGB-D、内参和 TF，用于复核")
+    result.add_argument("--episode-dir", help="配合 --execute：向正在采集的目录写入任务结果和阶段事件；每目录仅一次任务")
     result.add_argument("--joint-states-topic", default="/wheel_arm/joint_states")
     result.add_argument("--odom-topic", default="/odometry/filtered")
     return result
@@ -217,6 +221,8 @@ class CupGraspClient(ArmGoalClient):
 
     def perform(self, plans, cup, scene):
         for label, model, trajectory, start, goal, expected, target in plans:
+            # Includes pre-motion checks and post-motion visual verification.
+            task_event(self, "phase_started", phase=label, motion_skipped=trajectory is None)
             self.model = model
             current = self.snapshot()
             self.guard_base()
@@ -249,13 +255,33 @@ class CupGraspClient(ArmGoalClient):
                 delta = verify_lift(cup, raised, self.options.lift_height)
                 print(f"[视觉确认] 杯口升高 {delta*1000:.1f} mm；非力传感器确认", flush=True)
                 self.holding_verified = True
+                task_event(self, "lift_verified", method="rgbd_cup_top_height", height_delta_m=delta)
                 end = time.monotonic()+1
                 while time.monotonic() < end:
                     rclpy.spin_once(self, timeout_sec=.02)
+                hold_seconds = getattr(self.options, "hold_seconds", 1.)
+                if getattr(self.options, "finish", "place") == "hold" and hold_seconds > 1.:
+                    task_event(self, "hold_started", requested_seconds=hold_seconds)
+                    print(f"[持杯记录] 继续保持 {hold_seconds:g} 个仿真秒，结束时复查杯子高度。", flush=True)
+                    until = self.get_clock().now().nanoseconds + round(hold_seconds*1e9)
+                    wall_deadline = time.monotonic()+max(30., hold_seconds*4)
+                    while self.get_clock().now().nanoseconds < until:
+                        if self.stopping:
+                            raise KeyboardInterrupt()
+                        if time.monotonic() > wall_deadline:
+                            raise RuntimeError("持杯记录期间仿真时间未正常推进")
+                        rclpy.spin_once(self, timeout_sec=.02)
+                        self.guard_base()
+                    held = self.observer.capture(require_support=False, label="hold_verification")
+                    held_delta = verify_lift(cup, held, self.options.lift_height)
+                    task_event(self, "hold_verified", method="rgbd_cup_top_height", height_delta_m=held_delta)
             if label == "retreat":
                 placed = self.observer.capture(label="placed_verification")
                 if np.linalg.norm(placed.center-cup.center) > .015:
                     raise RuntimeError("放下后位置偏离原目标超过 15 mm，请检查杯子")
+                task_event(self, "placement_verified", method="rgbd_supported_cup_position",
+                           position_error_m=float(np.linalg.norm(placed.center-cup.center)))
+            task_event(self, "phase_finished", phase=label, motion_skipped=trajectory is None)
         if getattr(self.options, "finish", "place") == "hold":
             print("[完成] 杯子已抓起并通过 RGB-D 抬升验证，保持夹持；未放回、未递送。", flush=True)
         else:
@@ -290,9 +316,12 @@ def run(node, options, confirm=None):
         if not accepted:
             print("[取消] 未执行。", flush=True)
             return 0
+        # Interactive confirmation does not spin the node; refresh /clock first.
         node.snapshot()
+        task_event(node, "execution_started")
         unchanged(cup, node.observer.capture(label="before_execute"))
         node.perform(plans, cup, scene)
+        task_event(node, "procedure_completed")
         return 0
     finally:
         if node.closed:
@@ -310,6 +339,10 @@ def main(args=None):
     options = parser().parse_args(remove_ros_args(argv)[1:])
     if not .05 <= options.lift_height <= .12:
         parser().error("--lift-height 必须在 0.05 至 0.12 米之间")
+    if not 1 <= options.hold_seconds <= 30 or (options.finish != "hold" and options.hold_seconds != 1.):
+        parser().error("--hold-seconds 须为 1～30 秒，且自定义值只用于 --finish hold")
+    if options.episode_dir and not options.execute:
+        parser().error("--episode-dir 需要 --execute；预览和仅识别不标记示范任务")
     node, handlers = None, {}
     try:
         rclpy.init(args=[argv[0], "--ros-args", "-p", "use_sim_time:=true", "--", *argv[1:]],
@@ -323,7 +356,7 @@ def main(args=None):
 
         for signum in (signal.SIGINT, signal.SIGTERM):
             handlers[signum] = signal.signal(signum, interrupted)
-        return run(node, options)
+        return run_with_metadata(node, options, run)
     except (KeyboardInterrupt, EOFError):
         print("[取消] 当前任务已中断。", flush=True)
         return 130

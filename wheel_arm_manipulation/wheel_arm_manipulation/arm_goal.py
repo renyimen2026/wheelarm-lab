@@ -137,32 +137,54 @@ class ArmGoalClient(Node):
             if self.stopping and not ignore_stop:
                 raise KeyboardInterrupt()
             rclpy.spin_once(self, timeout_sec=0.02)
-            valid = self.fresh(self.joints, self.joint_received, after, ros_after)
+            # Joint/odom callbacks can precede the matching /clock callback by
+            # a few ms. Validate a frozen pair once the clock catches up, rather
+            # than repeatedly clearing 0.3 s of quiet history for callback order.
+            joints, odom = copy.deepcopy(self.joints), copy.deepcopy(self.odom)
+            joint_received, odom_received = self.joint_received, self.odom_received
+            messages = (joints, odom) if settled else (joints,)
+            stamps = [m.header.stamp.sec*10**9+m.header.stamp.nanosec for m in messages if m is not None]
+            now = self.get_clock().now().nanoseconds
+            future = max([0]+[stamp-now for stamp in stamps])
+            timing = getattr(self, 'snapshot_clock_timing', None)
+            if timing is None:
+                timing = self.snapshot_clock_timing = {'catchup_attempts':0,'recoveries':0,'max_future_ms':0.}
+            timing['max_future_ms'] = max(timing['max_future_ms'],future/1e6)
+            if now>0 and 0<future<=100_000_000:
+                timing['catchup_attempts'] += 1
+                catchup = min(deadline,time.monotonic()+.1)
+                while self.get_clock().now().nanoseconds<max(stamps) and time.monotonic()<catchup:
+                    if self.stopping and not ignore_stop:raise KeyboardInterrupt()
+                    rclpy.spin_once(self,timeout_sec=.002)
+                if self.get_clock().now().nanoseconds>=max(stamps):timing['recoveries'] += 1
+            valid = self.fresh(joints, joint_received, after, ros_after)
             if valid:
-                values_from_state(self.joints, self.model)
+                values_from_state(joints, self.model)
             if valid and not settled:
-                return copy.deepcopy(self.joints)
+                return joints
             if valid:
-                for model in self.stationary_models:
-                    values_from_state(self.joints, model)
-                    indices = [self.joints.name.index(name) for name in model.joints]
-                    maximum = 0.005 if model.group == "gripper" else 0.02
-                    valid = valid and len(self.joints.velocity) == len(self.joints.name) and all(
-                        math.isfinite(self.joints.velocity[i]) and abs(self.joints.velocity[i]) <= maximum for i in indices)
-            valid = valid and self.fresh(self.odom, self.odom_received, after, ros_after)
+                for sample in (joints,self.joints):
+                    for model in self.stationary_models:
+                        values_from_state(sample, model)
+                        indices = [sample.name.index(name) for name in model.joints]
+                        maximum = 0.005 if model.group == "gripper" else 0.02
+                        valid = valid and len(sample.velocity) == len(sample.name) and all(
+                            math.isfinite(sample.velocity[i]) and abs(sample.velocity[i]) <= maximum for i in indices)
+            valid = valid and self.fresh(odom, odom_received, after, ros_after)
             if valid:
-                twist = self.odom.twist.twist
-                valid = self.odom.child_frame_id == self.model.frame
-                for vector, maximum in ((twist.linear, 0.02), (twist.angular, 0.04)):
-                    components = (vector.x, vector.y, vector.z)
-                    valid = valid and all(math.isfinite(v) for v in components) and math.hypot(*components) <= maximum
+                for sample in (odom,self.odom):
+                    twist = sample.twist.twist
+                    valid = valid and sample.child_frame_id == self.model.frame
+                    for vector, maximum in ((twist.linear, 0.02), (twist.angular, 0.04)):
+                        components = (vector.x, vector.y, vector.z)
+                        valid = valid and all(math.isfinite(v) for v in components) and math.hypot(*components) <= maximum
             now = self.get_clock().now().nanoseconds
             if not valid:
                 quiet_wall = quiet_ros = None
             elif quiet_wall is None:
                 quiet_wall, quiet_ros = time.monotonic(), now
             elif time.monotonic() - quiet_wall >= 0.3 and (now - quiet_ros) / 1e9 >= 0.3:
-                return copy.deepcopy(self.joints)
+                return joints
         raise RuntimeError("未获得新鲜关节反馈或连续停稳状态；检查 /clock、关节速度、里程计话题和底盘")
 
     def state(self, message, values=None):
@@ -281,7 +303,10 @@ class ArmGoalClient(Node):
 
     def execute(self, trajectory, start, goal):
         # Revalidate the same previewed path after confirmation, then refresh the start.
-        message = self.snapshot()
+        # A caller that already confirmed settling may supply a fresh-state
+        # check without repeating the whole settling window at each checkpoint.
+        snapshot = getattr(self, "pre_execution_snapshot", self.snapshot)
+        message = snapshot()
         deadline = time.monotonic() + max(20.0, self.options.wait)
         for point in trajectory.joint_trajectory.points:
             remaining = deadline - time.monotonic()
@@ -289,7 +314,7 @@ class ArmGoalClient(Node):
                 raise RuntimeError("执行前轨迹碰撞复查超时；未执行")
             values = dict(zip(trajectory.joint_trajectory.joint_names, point.positions))
             self.valid_state(self.state(message, values), min(self.options.wait, remaining))
-        message = self.snapshot()
+        message = snapshot()
         current = values_from_state(message, self.model)
         if any(abs(current[name] - start[name]) > self.model.start_tolerance for name in self.model.joints):
             raise RuntimeError("确认期间机械臂状态已变化，原轨迹作废；请重新规划")
@@ -301,6 +326,9 @@ class ArmGoalClient(Node):
                 raise RuntimeError("MoveIt 执行 Action 未就绪")
             if self.stopping:
                 raise KeyboardInterrupt()
+            pre_execution_guard = getattr(self, "pre_execution_guard", None)
+            if pre_execution_guard is not None:
+                pre_execution_guard()
             self.execution_pending = True
             future = client.send_goal_async(ExecuteTrajectory.Goal(trajectory=trajectory), goal_uuid=identity)
             if not self.wait(future, self.options.wait, True):

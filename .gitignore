@@ -13,6 +13,8 @@ observations/
 *.db3
 
 # Python bytecode
+.venv-lerobot/
+.venv-smolvla/
 __pycache__/
 .pytest_cache/
 *.py[cod]

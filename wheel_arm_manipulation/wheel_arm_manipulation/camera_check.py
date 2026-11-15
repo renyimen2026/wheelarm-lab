@@ -83,9 +83,17 @@ def main(args=None):
     parser.add_argument("--seconds", type=float, default=30.)
     parser.add_argument("--depth-topic", default="/camera/depth_image")
     parser.add_argument("--rgb-topic", default="/camera/image")
+    parser.add_argument("--timing-only", action="store_true", help="仅诊断 RGB 消息时间戳和到达间隔，不处理图像像素")
+    parser.add_argument("--reliability", choices=("best_effort", "reliable"), default="best_effort",
+                        help="仅用于 --timing-only；两种模式队列深度均为 5，默认 best_effort")
+    parser.add_argument("--label", default="unlabelled", help="时间诊断实验名称，例如 baseline 或 capture")
+    parser.add_argument("--output-dir", default="observations/camera_timing", help="时间诊断输出根目录")
     options = parser.parse_args(remove_ros_args(args=args)[1:])
     if not np.isfinite(options.seconds) or options.seconds <= 0:
         parser.error("--seconds 必须是正数")
+    if options.timing_only:
+        from wheel_arm_manipulation.camera_timing import run_timing
+        return run_timing(options, args)
     rclpy.init(args=args)
     node = CameraCheck(options)
     try:

@@ -4,11 +4,78 @@ from dataclasses import replace
 from moveit_msgs.msg import AllowedCollisionEntry, AllowedCollisionMatrix, CollisionObject, PlanningScene
 import numpy as np
 import pytest
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 from wheel_arm_manipulation.cup_grasp import parser, straight_trajectory, unchanged, verify_lift
 from wheel_arm_manipulation.grasp_kinematics import GraspKinematics
 from wheel_arm_manipulation.grasp_scene import GraspScene, contact_matrix
 from wheel_arm_manipulation.planning import load_model
+
+
+@pytest.mark.parametrize("hold_ok", [True, False])
+def test_extended_hold_stays_inside_lift_phase_and_rechecks_height(monkeypatch, hold_ok):
+    from wheel_arm_manipulation import cup_grasp
+    events = []
+    monkeypatch.setattr(cup_grasp, "task_event", lambda node, kind, **data: events.append((kind, data)))
+    monkeypatch.setattr(cup_grasp.rclpy, "spin_once", lambda *a, **kw: None)
+    ticks = iter(range(100))
+    monkeypatch.setattr(cup_grasp.time, "monotonic", lambda: next(ticks))
+    stamps = iter([1, 2, 6, 12])
+    cup = SimpleNamespace(center=np.array([.65, 0, .60]), radius=.025, top=.65)
+    raised = copy.deepcopy(cup)
+    raised.top += .08
+    held = copy.deepcopy(raised if hold_ok else cup)
+    joint = SimpleNamespace(name=[], position=[])
+    arm = SimpleNamespace(joints=[], start_tolerance=.01, check=lambda _: None)
+    node = Mock(arm=arm, gripper=arm, joints=joint, stopping=False,
+                options=SimpleNamespace(finish="hold", lift_height=.08, hold_seconds=10.))
+    node.snapshot.return_value = joint
+    node.get_clock.return_value.now.side_effect = lambda: SimpleNamespace(nanoseconds=next(stamps)*10**9)
+    node.observer.capture.side_effect = [raised, held]
+    plans = [("lift", arm, object(), {}, {}, joint, None)]
+    if hold_ok:
+        cup_grasp.CupGraspClient.perform(node, plans, cup, Mock())
+        assert [kind for kind, _ in events] == [
+            "phase_started", "lift_verified", "hold_started", "hold_verified", "phase_finished"]
+    else:
+        with pytest.raises(RuntimeError, match="杯口升高验证"):
+            cup_grasp.CupGraspClient.perform(node, plans, cup, Mock())
+        assert events[-1][0] == "hold_started"
+
+
+@pytest.mark.parametrize("lift_ok", [True, False])
+def test_execution_emits_phase_boundaries_and_only_verified_evidence(monkeypatch, lift_ok):
+    from wheel_arm_manipulation import cup_grasp
+    events = []
+    monkeypatch.setattr(cup_grasp, "task_event", lambda node, kind, **data: events.append((kind, data)))
+    ticks = iter(range(100))
+    monkeypatch.setattr(cup_grasp.time, "monotonic", lambda: next(ticks))
+    cup = SimpleNamespace(center=np.array([.65, 0, .60]), radius=.025, top=.65,
+                         table_bounds=np.array([[.5, -.2, .55], [.8, .2, .55]]))
+    lifted = copy.deepcopy(cup)
+    lifted.top += .08 if lift_ok else 0.
+    joint = SimpleNamespace(name=[], position=[])
+    arm = SimpleNamespace(joints=[], start_tolerance=.01, check=lambda _: None)
+    gripper = copy.copy(arm)
+    node = Mock(arm=arm, gripper=gripper, joints=joint,
+                options=SimpleNamespace(finish="place", lift_height=.08))
+    node.snapshot.return_value = joint
+    node.observer.capture.side_effect = lambda **kw: lifted if kw.get("label") == "lift_verification" else cup
+    labels = ["open", "pregrasp", "approach", "close", "lift", "lower", "release", "retreat"]
+    plans = [(label, gripper if label in ("open", "close", "release") else arm,
+              None if label == "open" else object(), {}, {}, joint, None) for label in labels]
+    if lift_ok:
+        cup_grasp.CupGraspClient.perform(node, plans, cup, Mock())
+        assert [data["phase"] for kind, data in events if kind == "phase_finished"] == labels
+        assert any(kind == "lift_verified" for kind, _ in events)
+        assert any(kind == "placement_verified" for kind, _ in events)
+        assert events[0] == ("phase_started", {"phase": "open", "motion_skipped": True})
+    else:
+        with pytest.raises(RuntimeError, match="杯口升高验证"):
+            cup_grasp.CupGraspClient.perform(node, plans, cup, Mock())
+        assert events[-1] == ("phase_started", {"phase": "lift", "motion_skipped": False})
+        assert not any(kind == "lift_verified" for kind, _ in events)
 
 
 @pytest.mark.parametrize("position", [[.62, .04, .60], [.7, -.04, .63], [.668, 0, .68]])

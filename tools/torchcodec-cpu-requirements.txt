@@ -1,0 +1,4 @@
+# CPU decoder wheel for this project's Python 3.10 / Linux x86_64 environment.
+# A direct PyPI wheel prevents --torch-backend cu118 from selecting CUDA decoding.
+# Model tensor operations still use the CUDA PyTorch installed separately.
+torchcodec @ https://files.pythonhosted.org/packages/52/6e/d12c327338d9561f2ef0896218f163e6635d4ae1d688f1f28664d729b1ab/torchcodec-0.5-cp310-cp310-manylinux_2_28_x86_64.whl

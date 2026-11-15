@@ -1,0 +1,14 @@
+{
+  "purpose":"expert recovery from policy-visited approach/early-lift states; no failed rollout used as a success label",
+  "source_rollout":"autonomous/20261114/geometry500_run1/policy/live_report.json",
+  "slots":[
+    {"split":"train","initial_arm_q":[-0.9454,1.9063,-0.9780],"initial_width_m":0.077},
+    {"split":"train","initial_arm_q":[-0.9142,1.8154,-0.9119],"initial_width_m":0.078},
+    {"split":"train","initial_arm_q":[-0.8781,1.7177,-0.8554],"initial_width_m":0.075},
+    {"split":"train","initial_arm_q":[-0.8620,1.6603,-0.8059],"initial_width_m":0.069},
+    {"split":"train","initial_arm_q":[-0.8637,1.6321,-0.7770],"initial_width_m":0.063},
+    {"split":"train","initial_arm_q":[-0.8709,1.6137,-0.7477],"initial_width_m":0.060},
+    {"split":"independent_test","initial_arm_q":[-0.91,1.79,-0.89],"initial_width_m":0.076},
+    {"split":"independent_test","initial_arm_q":[-0.865,1.65,-0.79],"initial_width_m":0.066}
+  ]
+}

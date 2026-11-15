@@ -1,8 +1,8 @@
 # 参数与操作参考
 
-[返回项目首页](../README.md) · [Python CUDA 服务](../model_service/README.md)
+[返回项目首页](../README.md) · [Python CUDA 服务](../model_service/README.md) · [SmolVLA 指南](vla.md)
 
-首次使用请先完成首页的建图导航流程。本页命令在工作空间根目录执行，
+首次使用请按首页选择对应的导航或机械臂入口。本页 ROS 命令在工作空间根目录执行，
 并已加载 ROS 与 `install/setup.bash`；完整选项以各入口的 `--help` 为准。
 
 ## 场景与启动入口
@@ -301,6 +301,9 @@ ros2 run wheel_arm_manipulation cup_grasp --detect-only --output-dir observation
 | --- | --- | --- |
 | `--detect-only` | 关闭 | 仅识别并发布标记，不发送运动目标 |
 | `--execute` | 关闭 | 完整预览后人工确认执行，与 `--detect-only` 互斥 |
+| `--finish` | `place` | `place` 放回并退离；`hold` 抬升后保持夹持，不放回 |
+| `--hold-seconds` | `1` | `hold` 模式的视觉保持检查时长；VLA 示范基线显式设置为 `10` |
+| `--episode-dir` | 不关联 | 将任务结果与阶段事件写入正在采集的目录，每目录只允许关联一次任务 |
 | `--wait` / `--timeout` | `15` / `120` | 反馈/采集/服务等待、单次运动执行墙钟超时秒数 |
 | `--velocity` / `--acceleration` | `0.2` / `0.2` | 相对共享限位的缩放 |
 | `--lift-height` | `0.08 m` | 允许 `0.05～0.12 m` |
@@ -324,6 +327,24 @@ ros2 run wheel_arm_manipulation cup_grasp --detect-only --output-dir observation
 执行前与接近/闭爪前复查杯子；底盘相对本次识别位姿变化时停止原计划。
 抬升后用深度再次检查杯口升高，通过后才放回并松爪；视觉失败或夹持状态不确定时，
 保留夹持和规划附着对象，人工检查后重启场景，不自动松爪或回零。
+
+`cup_test.launch.py` 支持 `initial_shoulder_lift`、`initial_elbow`、`initial_wrist_pitch`，
+默认分别为 `-1.05`、`2.1`、`-1.05` rad，便于采集时改变初始姿态，默认行为不变。
+独立自主示范采集器会在明确调用后自动执行自己仿真中的完整教师流程，
+不属于 `cup_grasp` CLI 的交互确认模式，命令和适用范围见 [VLA 指南](vla.md#采集带标签的-moveit-示范)。
+
+### VLA 观测、训练和推理
+
+新增 `observation_capture` 记录 RGB/实际五维状态及可选控制器插值参考；
+`action_alignment` 提供动作候选、任务片段和时间网格诊断。
+相机订阅默认仍为 best effort，数据采集基线显式使用 `--rgb-reliability reliable`。
+`camera_check --timing-only --seconds 30 --label baseline --reliability reliable`
+只缓存时间戳，输出源时间间隔、接收间隔和异常时间戳，不转换图片。
+
+模型训练、LeRobot 转换和实时推理使用单独的 Python 环境；固定杯位的已验收 SmolVLA 流程见
+[VLA 操作指南](vla.md)和[完整工具索引](../tools/README.md)。
+传统几何抓取是示范教师；运行 VLA 时模型预测动作，MoveIt 保留已知碰撞检查与执行，
+RGB-D 仅独立检查杯子抬升/保持，不提供阶段或教师参考给模型。
 
 ### RViz 与深度排错
 
@@ -544,6 +565,9 @@ ros2 run wheel_arm_navigation llm_eval \
 当前没有用真实模型位姿替代定位的保证。
 
 ## 运行测试
+
+LeRobot/SmolVLA 离线测试不混入 ROS 系统 Python，分环境命令见
+[工具测试说明](../tools/README.md#运行离线测试)；实际仿真采集和验收需要显式运行专用脚本。
 
 常规包测试见首页。可选集成测试会启动模拟 action、TF 和相机，
 必须选择未被其他机器人使用的 ROS 域，下面的编号仅为示例：

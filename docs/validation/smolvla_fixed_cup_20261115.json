@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "artifact_role": "historical_local_validation_summary_not_a_runnable_release_manifest",
+  "reviewed_local_date": "2026-11-15",
+  "timezone": "Asia/Shanghai",
+  "baseline_git_commit": "e2279f5",
+  "scope": "fixed ceramic cup and table, mast RGB camera, slow simulation; no cup-position or hardware generalization claim",
+  "task_instruction": "拿起桌上的杯子并保持夹持",
+  "model": {
+    "type": "SmolVLA",
+    "checkpoint_sha256": "54be24f9d5938ea35bfcc2da510e06f6ec2a131dfe32e50bec99e8c7fa5bb015",
+    "asset_revisions": {
+      "policy_repo_id": "lerobot/smolvla_base",
+      "policy_revision": "5e8d12a6e2975b0e5e5fce7c8caf47c371d257b6",
+      "vlm_repo_id": "HuggingFaceTB/SmolVLM2-500M-Video-Instruct",
+      "vlm_revision": "7b375e1b73b11138ff12fe22c8f2822d8fe03467"
+    },
+    "training_updates_in_lineage": 4000,
+    "native_trainer": "lerobot.scripts.lerobot_train.train@0.4.4",
+    "batch_size": 8,
+    "trainable_storage": "FP32",
+    "autocast": "BF16",
+    "normalization_sha256": "6ee4b959205219035aa7de11e3cf7d31ed6ea9ff08f27c05dfacc826da396d8f"
+  },
+  "dataset": {
+    "training_original_recordings": 21,
+    "training_frames": 10972,
+    "training_contiguous_segments": 28,
+    "development_validation_frames": 444,
+    "independent_complete_50_step_starts": 998,
+    "split_unit": "original recording; all derived segments inherit split",
+    "validation_used_for_normalization": false
+  },
+  "inference": {
+    "state_action_dimensions": 5,
+    "internal_max_dimensions": 32,
+    "predicted_chunk_size": 50,
+    "executed_steps": 10,
+    "action_stride": 1,
+    "ensemble_size": 1,
+    "gripper_start_source": "reference"
+  },
+  "acceptance": {
+    "target_cup_lift_mm": 80,
+    "height_tolerance_mm": 10,
+    "minimum_hold_wall_and_ros_seconds": 10,
+    "predeclared_cases": [
+      {
+        "case": 1,
+        "seed": 20261131,
+        "initial_arm_rad": [
+          -1.05,
+          2.1,
+          -1.05
+        ],
+        "success": true,
+        "completed_cycles": 36,
+        "cup_lift_mm": 70.49433937034955,
+        "hold_ros_seconds": 10.3,
+        "elapsed_wall_seconds_including_startup": 285.17897719199755
+      },
+      {
+        "case": 2,
+        "seed": 20261132,
+        "initial_arm_rad": [
+          -1.03,
+          2.08,
+          -1.05
+        ],
+        "success": true,
+        "completed_cycles": 39,
+        "cup_lift_mm": 73.72368791798844,
+        "hold_ros_seconds": 10.3,
+        "elapsed_wall_seconds_including_startup": 315.92277663799905
+      },
+      {
+        "case": 3,
+        "seed": 20261133,
+        "initial_arm_rad": [
+          -1.05,
+          2.1,
+          -1.05
+        ],
+        "success": true,
+        "completed_cycles": 39,
+        "cup_lift_mm": 72.63460945850619,
+        "hold_ros_seconds": 10.29,
+        "elapsed_wall_seconds_including_startup": 318.93249328800084
+      },
+      {
+        "case": 4,
+        "seed": 20261134,
+        "initial_arm_rad": [
+          -1.03,
+          2.08,
+          -1.05
+        ],
+        "success": true,
+        "completed_cycles": 39,
+        "cup_lift_mm": 77.47924792458949,
+        "hold_ros_seconds": 10.3,
+        "elapsed_wall_seconds_including_startup": 316.1037797220015
+      },
+      {
+        "case": 5,
+        "seed": 20261135,
+        "initial_arm_rad": [
+          -1.05,
+          2.1,
+          -1.05
+        ],
+        "success": true,
+        "completed_cycles": 48,
+        "cup_lift_mm": 70.21362382173002,
+        "hold_ros_seconds": 10.3,
+        "elapsed_wall_seconds_including_startup": 374.1103655350016
+      }
+    ],
+    "graphical_retest": {
+      "gui": true,
+      "rviz": true,
+      "seed": 20261131,
+      "success": true,
+      "cup_lift_mm": 71.68581090073233,
+      "hold_ros_seconds": 10.29,
+      "completed_cycles": 36,
+      "elapsed_wall_seconds_including_startup": 287.1389843649995,
+      "owned_gui_process_liveness_samples": 41
+    },
+    "user_reported_success": true,
+    "user_report_date": "2026-11-15"
+  },
+  "offline_evaluation": {
+    "overlapping_action_comparisons": 49900,
+    "old_2000_step_gripper_mae_mm": 0.9205535148272294,
+    "new_4000_step_gripper_mae_mm": 0.7069636496131071,
+    "old_close_phase_gripper_mae_mm": 3.680026635348079,
+    "new_close_phase_gripper_mae_mm": 3.1993569424712516,
+    "is_closed_loop_success_rate": false
+  },
+  "runtime_source_sha256": {
+    "tools/probe_smolvla_live.py": "f43b86723fd0bc00078e7a3264711b3e75ef5f7cf59176f44d9d75344eb89a86",
+    "tools/execute_vla_short_motion.py": "86a9be84206cdd8a4c6022136bc83f61fbb5e40ee5304cbe970feefae6d02160",
+    "tools/ros_probe_session.py": "0d80bf88e53344ad2008ea46d03d2ff081fb81b6d57d23de9185dba809172155",
+    "tools/vla_trial_summary.py": "d44d7dfda613424131c966843511f4a4a17043a7a4e5a01d9bb42afa17827ab9",
+    "tools/probe_smolvla_forward.py": "040774ced0d12dd78261431bfc1e0af01d481f2886e5c54e254614a3303d7112",
+    "tools/smolvla_precision.py": "4c8b3fa80a3728a622b6bdee7112adbdf4467511acd8b7e30ca784e9985ebe57",
+    "wheel_arm_manipulation/wheel_arm_manipulation/arm_goal.py": "4ceebc9acab030bf38606f32d1c5d93aa0fb1c47a7c81c418a5fa203e9d56c48",
+    "wheel_arm_manipulation/wheel_arm_manipulation/vla_short_motion.py": "39d603164edb1b14ff8cb5d3b937e025cd88eef5300a47af835896a826dab03e",
+    "wheel_arm_manipulation/wheel_arm_manipulation/planning.py": "2f509f21df266834aeadd30876339a8d7d75ae464d0c606c4b2d03c46f8fe0ca",
+    "wheel_arm_manipulation/wheel_arm_manipulation/observation_capture.py": "cd974068d620eea288b3ef260ff0ce1a6426b69bd3ff0c5cd2454adcfc56779f",
+    "wheel_arm_manipulation/wheel_arm_manipulation/controller_reference.py": "7a5e2dc02d7ada7120ad15138e1c28c46cc6b4c7bafc0930d22fc63db0eab8ab",
+    "wheel_arm_manipulation/wheel_arm_manipulation/image_qos.py": "625956aab6ba314d05aaaccfaa5e65aa5f4a67fe3763ee0f0340b2e57959fd11"
+  },
+  "raw_data_weights_and_local_release_manifest_distributed": false
+}

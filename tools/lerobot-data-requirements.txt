@@ -1,0 +1,10 @@
+# Local CPU dataset conversion/readback only. Model extras are a later stage.
+# Install with uv pip install --torch-backend cpu -r this-file.
+lerobot==0.4.4
+torch==2.7.1
+torchvision==0.22.1
+torchcodec==0.5.0
+datasets==4.8.5
+pyarrow==25.0.1
+numpy==2.2.6
+Pillow==12.3.0

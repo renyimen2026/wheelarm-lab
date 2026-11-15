@@ -4,13 +4,15 @@
 
 基于 **Ubuntu 22.04、ROS 2 Humble、Gazebo Fortress**，提供差速底盘、4 自由度
 机械臂与双指夹爪、室内场景，以及遥控、建图导航、本地语言指令、视觉问答与桌面抓取实验。
-项目持续维护，后续面向视觉语言导航（VLN）和视觉语言动作（VLA）扩展。
+项目持续维护，提供视觉语言动作（VLA）杯子抓取的数据、训练与仿真验收流程。
 
 当前语言导航基于**已记录的命名目标点**，视觉功能基于**单帧 RGB 问答**；
-抓取基于**受控桌面场景中的 RGB-D 几何定位**。尚不具备完整 VLN、自主物体搜索或语言驱动抓取能力。
+传统抓取基于**受控桌面场景中的 RGB-D 几何定位**；SmolVLA 已完成**固定杯位的慢速闭环抓取与保持**验证。
+尚不具备完整 VLN、自主物体搜索、任意杯位泛化或通用语言抓取能力。
 
 [快速开始](#快速开始) · [建图与导航](#建图与导航) · [语言与视觉任务](#语言与视觉任务) ·
 [机械臂规划](#机械臂规划) ·
+[SmolVLA 抓杯](docs/vla.md) ·
 [参数与排错](docs/reference.md) · [模型服务](model_service/README.md) · [更新记录](CHANGELOG.md)
 
 ## 能做什么
@@ -20,6 +22,8 @@
 | 机器人与控制 | 差速底盘、4 自由度机械臂、`ros2_control`、键盘组合键遥控 |
 | 机械臂规划 | MoveIt 2、OMPL RRTConnect、关节/末端位置目标、双指夹爪与确认后执行 |
 | 桌面抓取 | RGB-D 圆柱杯定位、水平侧向抓取、视觉抬升验证与放回；限定受控测试场景 |
+| VLA 杯子抓取 | RGB＋实际关节状态＋任务指令输入 SmolVLA；五维动作闭环、RGB-D 抬升与十秒保持验收 |
+| VLA 数据与训练 | 控制器参考采集、任务/阶段元数据、时间网格、LeRobot v3 转换、原生批训练与独立验证 |
 | 感知与状态估计 | 2D LiDAR、IMU、RGB-D 相机、轮速里程计与 IMU 的 EKF 融合 |
 | 建图与导航 | `slam_toolbox` 建图与回环、AMCL 固定地图定位、Nav2 规划与避障 |
 | 任务执行 | 命名目标点、顺序多点任务、任务配置、取消处理与执行日志 |
@@ -67,7 +71,8 @@ source install/setup.bash
 
 **目录约定：**后续 ROS 命令均在工作空间根目录 `wheelarm_ws/` 执行；
 每个新 ROS 终端都需要加载 ROS 和 `install/setup.bash`。
-模型服务命令在仓库目录 `src/wheelarm-lab/` 执行，使用独立 conda 环境，
+模型服务命令在仓库目录 `src/wheelarm-lab/` 执行，使用独立 conda 环境；
+VLA 工具也在仓库目录执行，使用 `.venv-lerobot` / `.venv-smolvla` 独立环境。
 不要将模型依赖安装到 ROS Python 环境。
 
 ### 3. 启动仿真
@@ -302,6 +307,31 @@ ros2 run wheel_arm_manipulation cup_grasp --execute
 Fortress/Ogre2 异常渲染触发条件。相机诊断、杯子选项、算法假设与 RViz 图层见
 [桌面抓取参考](docs/reference.md#rgb-d-杯子抓取)。
 
+## SmolVLA 杯子抓取
+
+SmolVLA 使用高位 RGB、实际四关节角度和夹爪开口，以及任务指令预测未来动作。
+MoveIt 保留已知碰撞物检查与轨迹执行；RGB-D 几何测量用于独立验收抬升与保持，
+不作为策略输入，也不提供教师动作或阶段给模型。
+
+当前已验收配置使用原生批训练、可训练参数 FP32 存储和 BF16 计算，累计更新 4000 步。
+五个预先固定的新仿真案例和随后 Gazebo GUI＋RViz 复测均完成抓取与十秒保持，
+用户复测也已成功。范围是**固定桌面、固定杯位、直立无柄陶瓷杯和慢速执行**；
+这些结果不等价于任意杯位、物体或真实机器人的成功率。详细数据见
+[验证记录](docs/vla_validation.md)。
+
+仓库提供代码、依赖配置和验收流程；**原始数据、训练权重和可运行发布清单保留在本地，不随 Git 分发**。
+已有本地验收清单时，启动上面的高位相机陶瓷杯场景，在仓库目录另开已加载 ROS 工作空间的终端：
+
+```bash
+# 替换为本机已通过完整验收的清单绝对路径；运行后会发送仿真运动命令
+.venv-smolvla/bin/python -I tools/run_released_cup_policy.py \
+  --release /absolute/path/to/release_manifest.json
+```
+
+从环境安装、MoveIt 示范采集到转换、训练、独立验证及生成发布清单，见
+[VLA 操作指南](docs/vla.md)；全部脚本及早期实验工具见 [tools 索引](tools/README.md)。
+新克隆仓库后，需要先准备本地数据与权重并完成验收，不能直接使用他人的本地清单路径。
+
 ## 语言与视觉任务
 
 ### 选择模型服务
@@ -480,6 +510,10 @@ ros2 run wheel_arm_navigation llm_eval --endpoint http://127.0.0.1:11435
 | `maps/` | 地图 YAML/PGM、命名目标点、启动位姿先验 |
 | `mission_logs/` | 执行日志、目标快照、预加载状态和失败阶段 |
 | `observations/` | RGB 或 RGB-D 观测、时间元数据、视觉报告 |
+| `observations/vla/` | VLA 原始图片、实际状态、控制器参考、任务结果、阶段事件和时间网格 |
+| `observations/lerobot/` | 本地 LeRobot 数据集、来源映射和冻结训练统计 |
+| `observations/training/`、`observations/evaluations/` | 模型检查点、训练报告和独立评估 |
+| `observations/autonomous/`、`observations/delivery/` | 隔离仿真验收、失败记录和本地发布清单 |
 | `evaluation_logs/` | LLM 解析回归评测报告 |
 
 日志可能包含原始指令、图片和位置，公开数据前请自行检查。
@@ -491,11 +525,12 @@ wheelarm-lab/
 ├── wheel_arm_description/  # xacro/URDF、传感器、Gazebo 插件
 ├── wheel_arm_control/      # 底盘和机械臂 ros2_control 配置
 ├── wheel_arm_moveit_config/ # SRDF、运动学、OMPL、控制器映射和机械臂 RViz
-├── wheel_arm_manipulation/  # 末端/夹爪命令、RGB-D 杯子定位与确认式抓放
+├── wheel_arm_manipulation/  # 末端/夹爪命令、RGB-D 抓放、VLA 观测与数据处理
 ├── wheel_arm_gazebo/       # 场景、launch、EKF、SLAM/Nav2、RViz
 ├── wheel_arm_teleop/       # Tk 键盘遥控
 ├── wheel_arm_navigation/   # 命名目标、任务执行、语言解析与视觉观察
 ├── model_service/          # 独立 Python CUDA 服务，不参与 colcon 构建
+├── tools/                  # 独立 LeRobot/SmolVLA 数据、训练、推理和验收脚本
 ├── docs/                   # 参数、数据格式、排错与测试参考
 └── CHANGELOG.md            # 功能和配置变更历史
 ```
@@ -544,7 +579,7 @@ colcon test-result --verbose
 - 从几何杯子定位扩展到更通用的物体检测与空间感知。
 - 将周围 RGB-D 障碍物接入机械臂碰撞场景，逐步串联导航与抓取。
 - VLN 场景、语义标注、数据采集与评测接口。
-- VLA 策略接入。
+- 扩充 SmolVLA 杯位和任务变化数据，评估更广泛的闭环泛化与执行效率。
 
 ## 贡献与许可证
 

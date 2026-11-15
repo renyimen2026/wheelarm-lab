@@ -13,12 +13,17 @@ def generate_launch_description():
         DeclareLaunchArgument("camera_mount", default_value="low", choices=["low", "mast"]),
         DeclareLaunchArgument("cup_model", default_value="test_cup",
                               choices=["test_cup", "ceramic_mug", "ceramic_cup"]),
+        DeclareLaunchArgument("initial_shoulder_lift", default_value="-1.05"),
+        DeclareLaunchArgument("initial_elbow", default_value="2.1"),
+        DeclareLaunchArgument("initial_wrist_pitch", default_value="-1.05"),
         IncludeLaunchDescription(PythonLaunchDescriptionSource(PathJoinSubstitution([
             FindPackageShare("wheel_arm_moveit_config"), "launch", "sim.launch.py"])),
             launch_arguments={
                 "gui": LaunchConfiguration("gui"), "rviz": LaunchConfiguration("rviz"),
                 "camera_mount": LaunchConfiguration("camera_mount"),
-                "initial_shoulder_lift": "-1.05", "initial_elbow": "2.1", "initial_wrist_pitch": "-1.05",
+                "initial_shoulder_lift": LaunchConfiguration("initial_shoulder_lift"),
+                "initial_elbow": LaunchConfiguration("initial_elbow"),
+                "initial_wrist_pitch": LaunchConfiguration("initial_wrist_pitch"),
                 "world": PathJoinSubstitution([
                     FindPackageShare("wheel_arm_gazebo"), "worlds", PythonExpression([
                         "{'test_cup': 'grasp_test.sdf', 'ceramic_mug': 'grasp_mug.sdf', ",
